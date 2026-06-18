@@ -1,0 +1,8 @@
+-keep class com.nabil.usdtwallet.data.repository.** { *; }
+-keep class org.bitcoinj.** { *; }
+-dontwarn org.bitcoinj.**
+-dontwarn okhttp3.**
+-dontwarn retrofit2.**
+-keep class retrofit2.** { *; }
+-keepattributes Signature
+-keepattributes *Annotation*
