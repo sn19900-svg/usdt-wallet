@@ -165,7 +165,7 @@ private fun HistoryTxItem(
         }
 
         Spacer(Modifier.height(10.dp))
-        HorizontalDivider(color = CryptoDarkSurface)
+        Divider(color = CryptoDarkSurface)
         Spacer(Modifier.height(8.dp))
 
         // TX ID
