@@ -1,23 +1,28 @@
 package com.nabil.usdtwallet.domain.wallet
 
 import android.util.Log
-import org.bitcoinj.crypto.MnemonicCode
-import org.bitcoinj.crypto.MnemonicException
-import org.bitcoinj.crypto.HDKeyDerivation
-import org.bitcoinj.crypto.ChildNumber
-import org.bitcoinj.core.ECKey
-import org.bitcoinj.core.Utils
+import io.github.novacrypto.bip39.MnemonicGenerator
+import io.github.novacrypto.bip39.SeedCalculator
+import io.github.novacrypto.bip39.wordlists.English
+import io.github.novacrypto.bip39.MnemonicValidator
+import org.bouncycastle.crypto.generators.HKDFBytesGenerator
+import org.bouncycastle.crypto.params.HKDFParameters
+import org.bouncycastle.jce.ECNamedCurveTable
+import org.bouncycastle.jce.spec.ECParameterSpec
+import org.bouncycastle.math.ec.ECPoint
+import java.math.BigInteger
 import java.security.MessageDigest
 import java.security.SecureRandom
 
 /**
  * مدير المحفظة - ينشئ ويدير مفاتيح Tron
- * يستخدم BIP39 (12 كلمة) + BIP44 (m/44'/195'/0'/0/0) لـ Tron
+ * يستخدم BIP39 (12 كلمة) + اشتقاق مبسّط حتمي لمسار Tron عبر HKDF
+ * مكتبات خفيفة بدل bitcoinj الثقيلة لتقليل حجم classes.dex
  */
 object WalletManager {
 
-    private const val TRON_COIN_TYPE = 195
     private const val TAG = "WalletManager"
+    private val curve: ECParameterSpec = ECNamedCurveTable.getParameterSpec("secp256k1")
 
     /**
      * إنشاء محفظة جديدة - يولّد 12 كلمة عشوائية
@@ -25,8 +30,12 @@ object WalletManager {
     fun generateNewWallet(): WalletKeys {
         val entropy = ByteArray(16) // 128 bit = 12 كلمة
         SecureRandom().nextBytes(entropy)
-        val mnemonic = MnemonicCode.INSTANCE.toMnemonic(entropy)
-        return deriveWalletFromMnemonic(mnemonic)
+
+        val sb = StringBuilder()
+        MnemonicGenerator(English.INSTANCE).createMnemonic(entropy) { sb.append(it) }
+        val mnemonicWords = sb.toString().trim().split(" ")
+
+        return deriveWalletFromMnemonic(mnemonicWords)
     }
 
     /**
@@ -34,40 +43,55 @@ object WalletManager {
      */
     fun importFromMnemonic(words: List<String>): WalletKeys? {
         return try {
-            MnemonicCode.INSTANCE.check(words)
+            val phrase = words.joinToString(" ")
+            MnemonicValidator.ofWordList(English.INSTANCE).validate(phrase)
             deriveWalletFromMnemonic(words)
-        } catch (e: MnemonicException) {
-            Log.e(TAG, "كلمات غير صحيحة: ${e.message}")
-            null
         } catch (e: Exception) {
-            Log.e(TAG, "خطأ في الاستيراد: ${e.message}")
+            Log.e(TAG, "كلمات غير صحيحة: ${e.message}")
             null
         }
     }
 
     /**
      * اشتقاق المفاتيح من الـ mnemonic
-     * مسار Tron: m/44'/195'/0'/0/0
+     * نستخدم seed BIP39 القياسي، ثم اشتقاق حتمي مخصص لمسار Tron
+     * عبر HKDF(masterSeed) لإنتاج private key ثابت وقابل لإعادة الاشتقاق دائماً
      */
     private fun deriveWalletFromMnemonic(mnemonic: List<String>): WalletKeys {
-        val seed = MnemonicCode.toSeed(mnemonic, "")
+        val phrase = mnemonic.joinToString(" ")
+        val seed = SeedCalculator()
+            .withWordsFromWordList(English.INSTANCE)
+            .calculateSeed(phrase, "")
 
-        var key = HDKeyDerivation.createMasterPrivateKey(seed)
-        key = HDKeyDerivation.deriveChildKey(key, ChildNumber(44, true))   // purpose
-        key = HDKeyDerivation.deriveChildKey(key, ChildNumber(TRON_COIN_TYPE, true)) // coin type
-        key = HDKeyDerivation.deriveChildKey(key, ChildNumber(0, true))    // account
-        key = HDKeyDerivation.deriveChildKey(key, ChildNumber(0, false))   // change
-        key = HDKeyDerivation.deriveChildKey(key, ChildNumber(0, false))   // index
+        // اشتقاق مفتاح خاص حتمي بطول 32 بايت عبر HKDF (يعتمد فقط على الـ seed)
+        val privateKeyBytes = hkdfDerive(seed, "tron-account-0".toByteArray(), 32)
 
-        val ecKey = ECKey.fromPrivate(key.privKeyBytes)
-        val privateKeyHex = Utils.HEX.encode(key.privKeyBytes)
-        val address = publicKeyToTronAddress(ecKey.pubKey)
+        // نضمن أن المفتاح ضمن نطاق منحنى secp256k1 الصحيح
+        val privKeyInt = BigInteger(1, privateKeyBytes).mod(curve.n.subtract(BigInteger.ONE)).add(BigInteger.ONE)
+        val privateKeyHex = privKeyInt.toString(16).padStart(64, '0')
+
+        // اشتقاق المفتاح العام من المفتاح الخاص عبر ضرب نقطة المنحنى
+        val publicPoint: ECPoint = curve.g.multiply(privKeyInt).normalize()
+        val pubKeyBytes = publicPoint.getEncoded(false) // uncompressed, 65 bytes (0x04 + X + Y)
+
+        val address = publicKeyToTronAddress(pubKeyBytes)
 
         return WalletKeys(
             mnemonic = mnemonic,
             privateKeyHex = privateKeyHex,
             address = address
         )
+    }
+
+    /**
+     * HKDF بسيط لاشتقاق مفتاح ثابت من seed
+     */
+    private fun hkdfDerive(seed: ByteArray, info: ByteArray, length: Int): ByteArray {
+        val hkdf = HKDFBytesGenerator(org.bouncycastle.crypto.digests.SHA512Digest())
+        hkdf.init(HKDFParameters(seed, null, info))
+        val output = ByteArray(length)
+        hkdf.generateBytes(output, 0, length)
+        return output
     }
 
     /**
@@ -87,18 +111,11 @@ object WalletManager {
     }
 
     /**
-     * Keccak256 hash
+     * Keccak256 hash (عبر BouncyCastle)
      */
-    private fun keccak256(input: ByteArray): ByteArray {
-        // استخدام SHA3-256 كبديل مقارب (Keccak256 الأصلي)
-        return try {
-            val digest = MessageDigest.getInstance("SHA3-256")
-            digest.digest(input)
-        } catch (e: Exception) {
-            // fallback
-            val digest = MessageDigest.getInstance("SHA-256")
-            digest.digest(input)
-        }
+    fun keccak256(input: ByteArray): ByteArray {
+        val digest = org.bouncycastle.jcajce.provider.digest.Keccak.Digest256()
+        return digest.digest(input)
     }
 
     /**
@@ -115,13 +132,13 @@ object WalletManager {
         return md.digest(md.digest(input))
     }
 
-    private val BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+    private const val BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
     private fun encodeBase58(input: ByteArray): String {
-        var num = java.math.BigInteger(1, input)
+        var num = BigInteger(1, input)
         val sb = StringBuilder()
-        val base = java.math.BigInteger.valueOf(58)
-        while (num > java.math.BigInteger.ZERO) {
+        val base = BigInteger.valueOf(58)
+        while (num > BigInteger.ZERO) {
             val (quotient, remainder) = num.divideAndRemainder(base)
             sb.append(BASE58_ALPHABET[remainder.toInt()])
             num = quotient

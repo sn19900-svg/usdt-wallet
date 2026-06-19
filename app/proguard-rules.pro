@@ -1,6 +1,8 @@
 -keep class com.nabil.usdtwallet.data.repository.** { *; }
--keep class org.bitcoinj.** { *; }
--dontwarn org.bitcoinj.**
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.bouncycastle.**
+-keep class io.github.novacrypto.** { *; }
+-dontwarn io.github.novacrypto.**
 -dontwarn okhttp3.**
 -dontwarn retrofit2.**
 -keep class retrofit2.** { *; }

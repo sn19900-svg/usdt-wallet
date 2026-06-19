@@ -1,27 +1,31 @@
 package com.nabil.usdtwallet.domain.usecase
 
 import android.util.Log
-import com.google.gson.Gson
 import com.nabil.usdtwallet.data.repository.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.bitcoinj.core.ECKey
-import org.bitcoinj.core.Sha256Hash
-import org.bitcoinj.core.Utils
+import org.bouncycastle.asn1.sec.SECNamedCurves
+import org.bouncycastle.crypto.params.ECDomainParameters
+import org.bouncycastle.crypto.params.ECPrivateKeyParameters
+import org.bouncycastle.crypto.signers.ECDSASigner
+import org.bouncycastle.crypto.signers.HMacDSAKCalculator
+import org.bouncycastle.crypto.digests.SHA256Digest
 import java.math.BigInteger
 
 /**
  * يوقّع ويبث معاملة USDT TRC-20
  * الخطوات:
  *  1. triggerSmartContract → نحصل على rawData للمعاملة
- *  2. نوقّع بالمفتاح الخاص
+ *  2. نوقّع بالمفتاح الخاص (ECDSA secp256k1 عبر BouncyCastle)
  *  3. broadcastTransaction → نبث للشبكة
  */
 object TronTransactionSigner {
 
     private val api = TronApiClient.create()
-    private val gson = Gson()
     private const val TAG = "TronSigner"
+
+    private val curveParams = SECNamedCurves.getByName("secp256k1")
+    private val domainParams = ECDomainParameters(curveParams.curve, curveParams.g, curveParams.n, curveParams.h)
 
     suspend fun sendUsdt(
         fromAddress: String,
@@ -30,13 +34,9 @@ object TronTransactionSigner {
         privateKeyHex: String
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
-            // 1. تحويل المبلغ لـ sun (6 decimals)
             val amountSun = (amountUsdt * 1_000_000).toLong()
-
-            // 2. بناء parameter لـ transfer(address,uint256)
             val parameter = buildTransferParameter(toAddress, amountSun)
 
-            // 3. طلب المعاملة من TronGrid
             val triggerRequest = TronTransactionRequest(
                 ownerAddress = fromAddress,
                 toAddress = toAddress,
@@ -58,10 +58,7 @@ object TronTransactionSigner {
             val transaction = triggerResponse.transaction
                 ?: return@withContext Result.Error("لم يتم استلام بيانات المعاملة")
 
-            // 4. توقيع المعاملة
             val signedTx = signTransaction(transaction, privateKeyHex)
-
-            // 5. بث المعاملة
             val broadcastResponse = api.broadcastTransaction(signedTx)
 
             if (broadcastResponse.result) {
@@ -79,26 +76,15 @@ object TronTransactionSigner {
         }
     }
 
-    /**
-     * بناء ABI parameter لـ transfer(address,uint256)
-     * العنوان: 32 بايت (12 صفر + 20 بايت عنوان بدون بادئة 0x41)
-     * المبلغ:  32 بايت uint256
-     */
     private fun buildTransferParameter(toAddress: String, amountSun: Long): String {
         val addressBytes = base58ToBytes(toAddress)
-        // نأخذ آخر 20 بايت (بدون بادئة 0x41)
-        val addressHex = Utils.HEX.encode(addressBytes.drop(1).toByteArray())
+        val addressHex = bytesToHex(addressBytes.drop(1).toByteArray())
         val paddedAddress = addressHex.padStart(64, '0')
-
         val amountHex = amountSun.toString(16)
         val paddedAmount = amountHex.padStart(64, '0')
-
         return paddedAddress + paddedAmount
     }
 
-    /**
-     * توقيع المعاملة بـ ECDSA secp256k1
-     */
     @Suppress("UNCHECKED_CAST")
     private fun signTransaction(
         transaction: Map<String, Any>,
@@ -107,19 +93,29 @@ object TronTransactionSigner {
         val txId = transaction["txID"] as? String
             ?: throw IllegalStateException("txID غير موجود")
 
-        val txBytes = Utils.HEX.decode(txId)
-        val ecKey = ECKey.fromPrivate(BigInteger(privateKeyHex, 16))
-        val signature = ecKey.sign(Sha256Hash.wrap(txBytes))
+        val txBytes = hexToBytes(txId)
+        val privateKeyInt = BigInteger(privateKeyHex, 16)
 
-        // تنسيق التوقيع: r (32) + s (32) + v (1)
-        val r = signature.r.toByteArray().let {
-            if (it.size > 32) it.drop(1).toByteArray() else it.copyOf(32)
+        val signer = ECDSASigner(HMacDSAKCalculator(SHA256Digest()))
+        val privKeyParams = ECPrivateKeyParameters(privateKeyInt, domainParams)
+        signer.init(true, privKeyParams)
+
+        val sig = signer.generateSignature(txBytes)
+        var r = sig[0]
+        var s = sig[1]
+
+        val halfCurveOrder = domainParams.n.shiftRight(1)
+        if (s > halfCurveOrder) {
+            s = domainParams.n.subtract(s)
         }
-        val s = signature.s.toByteArray().let {
-            if (it.size > 32) it.drop(1).toByteArray() else it.copyOf(32)
-        }
-        val v = byteArrayOf(0x1b)
-        val sigHex = Utils.HEX.encode(r + s + v)
+
+        val recId = findRecoveryId(txBytes, r, s, privateKeyInt)
+
+        val rBytes = bigIntTo32Bytes(r)
+        val sBytes = bigIntTo32Bytes(s)
+        val vByte = byteArrayOf((27 + recId).toByte())
+
+        val sigHex = bytesToHex(rBytes + sBytes + vByte)
 
         val signedTx = transaction.toMutableMap()
         signedTx["signature"] = listOf(sigHex)
@@ -127,9 +123,75 @@ object TronTransactionSigner {
         return signedTx
     }
 
-    /**
-     * Base58Check decode لعنوان Tron
-     */
+    private fun findRecoveryId(messageHash: ByteArray, r: BigInteger, s: BigInteger, privateKey: BigInteger): Int {
+        val expectedPublicKey = curveParams.g.multiply(privateKey).normalize()
+
+        for (recId in 0..1) {
+            try {
+                val recovered = recoverPublicKey(messageHash, r, s, recId)
+                if (recovered != null && recovered.equals(expectedPublicKey)) {
+                    return recId
+                }
+            } catch (e: Exception) {
+                // جرّب القيمة التالية
+            }
+        }
+        return 0
+    }
+
+    private fun recoverPublicKey(
+        messageHash: ByteArray,
+        r: BigInteger,
+        s: BigInteger,
+        recId: Int
+    ): org.bouncycastle.math.ec.ECPoint? {
+        val n = domainParams.n
+        val curve = domainParams.curve
+
+        val x = r.add(n.multiply(BigInteger.valueOf((recId / 2).toLong())))
+        val prime = (curve as org.bouncycastle.math.ec.ECCurve.Fp).q
+        if (x >= prime) return null
+
+        val rPoint = decompressKey(x, recId and 1 == 1)
+        if (!rPoint.multiply(n).isInfinity) return null
+
+        val e = BigInteger(1, messageHash)
+        val eInv = BigInteger.ZERO.subtract(e).mod(n)
+        val rInv = r.modInverse(n)
+        val srInv = rInv.multiply(s).mod(n)
+        val eInvrInv = rInv.multiply(eInv).mod(n)
+
+        val q = curve.g.multiply(eInvrInv).add(rPoint.multiply(srInv))
+        return q.normalize()
+    }
+
+    private fun decompressKey(xBN: BigInteger, yBit: Boolean): org.bouncycastle.math.ec.ECPoint {
+        val curve = domainParams.curve as org.bouncycastle.math.ec.ECCurve.Fp
+        val compEnc = org.bouncycastle.util.BigIntegers.asUnsignedByteArray(curve.fieldSize / 8, xBN)
+        val prefix = if (yBit) 0x03 else 0x02
+        val encoded = byteArrayOf(prefix.toByte()) + compEnc
+        return curve.decodePoint(encoded)
+    }
+
+    private fun bigIntTo32Bytes(value: BigInteger): ByteArray {
+        val bytes = value.toByteArray()
+        return when {
+            bytes.size == 32 -> bytes
+            bytes.size > 32 -> bytes.drop(bytes.size - 32).toByteArray()
+            else -> ByteArray(32 - bytes.size) + bytes
+        }
+    }
+
+    private fun bytesToHex(bytes: ByteArray): String =
+        bytes.joinToString("") { "%02x".format(it) }
+
+    private fun hexToBytes(hex: String): ByteArray {
+        val cleanHex = if (hex.length % 2 != 0) "0$hex" else hex
+        return ByteArray(cleanHex.length / 2) { i ->
+            cleanHex.substring(i * 2, i * 2 + 2).toInt(16).toByte()
+        }
+    }
+
     private fun base58ToBytes(address: String): ByteArray {
         val alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
         var num = BigInteger.ZERO
@@ -140,6 +202,6 @@ object TronTransactionSigner {
         }
         val bytes = num.toByteArray()
         return if (bytes.size > 25) bytes.drop(bytes.size - 25).toByteArray()
-        else bytes.copyOf(25)
+        else ByteArray(25 - bytes.size) + bytes
     }
 }
