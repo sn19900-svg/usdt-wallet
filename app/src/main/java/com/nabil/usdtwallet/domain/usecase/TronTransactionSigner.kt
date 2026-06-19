@@ -161,7 +161,7 @@ object TronTransactionSigner {
         val srInv = rInv.multiply(s).mod(n)
         val eInvrInv = rInv.multiply(eInv).mod(n)
 
-        val q = curve.g.multiply(eInvrInv).add(rPoint.multiply(srInv))
+        val q = domainParams.g.multiply(eInvrInv).add(rPoint.multiply(srInv))
         return q.normalize()
     }
 
