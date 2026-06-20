@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,6 +32,18 @@ fun HomeScreen(viewModel: WalletViewModel) {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     var addressCopied by remember { mutableStateOf(false) }
+    var showNetworkSwitchConfirm by remember { mutableStateOf(false) }
+
+    if (showNetworkSwitchConfirm) {
+        NetworkSwitchDialog(
+            switchingToReal = uiState.isTestnet,
+            onConfirm = {
+                showNetworkSwitchConfirm = false
+                viewModel.toggleNetwork()
+            },
+            onDismiss = { showNetworkSwitchConfirm = false }
+        )
+    }
 
     Column(
         modifier = Modifier
@@ -38,6 +51,32 @@ fun HomeScreen(viewModel: WalletViewModel) {
             .background(CryptoDark)
             .verticalScroll(rememberScrollState())
     ) {
+        // ─── Network Toggle Banner ────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(if (uiState.isTestnet) CryptoYellow.copy(alpha = 0.15f) else CryptoRed.copy(alpha = 0.15f))
+                .padding(horizontal = 20.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    if (uiState.isTestnet) "🧪 وضع التجربة (أموال وهمية)" else "⚠️ وضع حقيقي (أموال فعلية)",
+                    color = if (uiState.isTestnet) CryptoYellow else CryptoRed,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            TextButton(onClick = { showNetworkSwitchConfirm = true }) {
+                Text(
+                    if (uiState.isTestnet) "التبديل لحقيقي" else "التبديل لتجريبي",
+                    color = if (uiState.isTestnet) CryptoYellow else CryptoRed,
+                    fontSize = 12.sp
+                )
+            }
+        }
+
         // ─── Update Banner ────────────────────────────────────
         if (uiState.updateAvailable) {
             Row(
@@ -348,5 +387,64 @@ fun TransactionItem(
             fontSize = 14.sp,
             fontWeight = FontWeight.SemiBold
         )
+    }
+}
+
+@Composable
+private fun NetworkSwitchDialog(
+    switchingToReal: Boolean,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(20.dp))
+                .background(CryptoDarkCard)
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(if (switchingToReal) "⚠️" else "🧪", fontSize = 40.sp)
+            Spacer(Modifier.height(12.dp))
+            Text(
+                if (switchingToReal) "التبديل للأموال الحقيقية؟" else "التبديل للتجربة الوهمية؟",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = CryptoWhite,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(
+                if (switchingToReal)
+                    "ستتعامل المحفظة الآن مع أموال USDT حقيقية على شبكة Tron الفعلية. تأكد أنك مستعد قبل المتابعة."
+                else
+                    "ستتحول المحفظة لشبكة Nile التجريبية، حيث الأموال وهمية بالكامل ولا قيمة فعلية لها.",
+                fontSize = 13.sp,
+                color = CryptoGray,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(20.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.weight(1f).height(46.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, CryptoGray),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CryptoGray)
+                ) { Text("إلغاء") }
+
+                Button(
+                    onClick = onConfirm,
+                    modifier = Modifier.weight(1f).height(46.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (switchingToReal) CryptoRed else CryptoGreen
+                    )
+                ) { Text("تأكيد", color = CryptoDark, fontWeight = FontWeight.Bold) }
+            }
+        }
     }
 }

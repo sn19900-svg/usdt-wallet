@@ -17,6 +17,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.platform.LocalContext
+import androidx.fragment.app.FragmentActivity
+import com.nabil.usdtwallet.domain.auth.BiometricAuthManager
 import com.nabil.usdtwallet.domain.wallet.WalletManager
 import com.nabil.usdtwallet.ui.Screen
 import com.nabil.usdtwallet.ui.WalletViewModel
@@ -25,14 +28,40 @@ import com.nabil.usdtwallet.ui.theme.*
 @Composable
 fun SendScreen(viewModel: WalletViewModel) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    val activity = context as? FragmentActivity
     var toAddress by remember { mutableStateOf("") }
     var amount by remember { mutableStateOf("") }
     var showConfirm by remember { mutableStateOf(false) }
+    var biometricError by remember { mutableStateOf<String?>(null) }
 
     val isAddressValid = toAddress.length == 34 && toAddress.startsWith("T")
     val amountDouble = amount.toDoubleOrNull() ?: 0.0
     val isAmountValid = amountDouble > 0 && amountDouble <= uiState.usdtBalance
     val canSend = isAddressValid && isAmountValid && !uiState.isLoading
+
+    fun confirmWithBiometric() {
+        if (activity == null) {
+            viewModel.sendUsdt(toAddress, amountDouble)
+            return
+        }
+        if (!BiometricAuthManager.canAuthenticate(activity)) {
+            // لا يوجد قفل جهاز مفعّل - نتابع الإرسال مباشرة
+            viewModel.sendUsdt(toAddress, amountDouble)
+            return
+        }
+        BiometricAuthManager.authenticate(
+            activity = activity,
+            title = "تأكيد الإرسال",
+            subtitle = "أكّد هويتك لإتمام عملية إرسال ${String.format("%.2f", amountDouble)} USDT",
+            onSuccess = {
+                biometricError = null
+                viewModel.sendUsdt(toAddress, amountDouble)
+            },
+            onError = { msg -> biometricError = "فشلت المصادقة: $msg" },
+            onCancel = { /* المستخدم ألغى، لا شيء يحدث */ }
+        )
+    }
 
     // نجاح الإرسال
     if (uiState.sendSuccess) {
@@ -52,7 +81,7 @@ fun SendScreen(viewModel: WalletViewModel) {
             amount = amountDouble,
             onConfirm = {
                 showConfirm = false
-                viewModel.sendUsdt(toAddress, amountDouble)
+                confirmWithBiometric()
             },
             onDismiss = { showConfirm = false }
         )
@@ -166,6 +195,20 @@ fun SendScreen(viewModel: WalletViewModel) {
         ) {
             Text("رسوم الشبكة", color = CryptoGray, fontSize = 13.sp)
             Text("~1 USDT (من TRX)", color = CryptoGray, fontSize = 13.sp)
+        }
+
+        // خطأ البصمة
+        biometricError?.let {
+            Spacer(Modifier.height(12.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(CryptoRed.copy(alpha = 0.15f))
+                    .padding(12.dp)
+            ) {
+                Text(it, color = CryptoRed, fontSize = 13.sp)
+            }
         }
 
         // خطأ

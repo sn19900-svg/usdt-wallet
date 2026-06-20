@@ -92,10 +92,17 @@ interface TronApiService {
 
 object TronApiClient {
 
-    const val USDT_CONTRACT_TRC20 = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
-    private const val BASE_URL = "https://api.trongrid.io/"
+    const val USDT_CONTRACT_TRC20_MAINNET = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+    // عقد USDT التجريبي الرسمي على شبكة Nile Testnet
+    const val USDT_CONTRACT_TRC20_TESTNET = "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj"
 
-    // احصل على API Key مجاني من: https://www.trongrid.io/
+    private const val MAINNET_URL = "https://api.trongrid.io/"
+    private const val TESTNET_URL = "https://nile.trongrid.io/"
+
+    // الإعداد الحالي - يُقرأ من NetworkConfig
+    val USDT_CONTRACT_TRC20: String
+        get() = if (NetworkConfig.isTestnet) USDT_CONTRACT_TRC20_TESTNET else USDT_CONTRACT_TRC20_MAINNET
+
     var API_KEY = "" // اختياري - يزيد الحد من 100 لـ 1000 طلب/ثانية
 
     fun create(): TronApiService {
@@ -116,12 +123,26 @@ object TronApiClient {
             .readTimeout(30, TimeUnit.SECONDS)
             .build()
 
+        val baseUrl = if (NetworkConfig.isTestnet) TESTNET_URL else MAINNET_URL
+
         return Retrofit.Builder()
-            .baseUrl(BASE_URL)
+            .baseUrl(baseUrl)
             .client(client)
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(TronApiService::class.java)
+    }
+}
+
+/**
+ * إعداد الشبكة الحالي - testnet للتجربة بأموال وهمية، mainnet للأموال الحقيقية
+ */
+object NetworkConfig {
+    var isTestnet: Boolean = true // افتراضياً Testnet للأمان، المستخدم يبدّل يدوياً
+        private set
+
+    fun setTestnet(value: Boolean) {
+        isTestnet = value
     }
 }
 

@@ -1,7 +1,6 @@
 package com.nabil.usdtwallet
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,12 +8,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.fragment.app.FragmentActivity
 import com.nabil.usdtwallet.domain.wallet.WalletManager
 import com.nabil.usdtwallet.ui.*
 import com.nabil.usdtwallet.ui.screens.*
 import com.nabil.usdtwallet.ui.theme.USDTWalletTheme
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val viewModel: WalletViewModel by viewModels()
 
@@ -40,9 +40,9 @@ fun WalletApp(viewModel: WalletViewModel) {
 
     when (uiState.currentScreen) {
         is Screen.Splash -> {
-            // شاشة بسيطة أثناء التحقق
             CreateWalletScreen(viewModel)
         }
+        is Screen.Lock -> LockScreen(viewModel)
         is Screen.CreateWallet -> CreateWalletScreen(viewModel)
         is Screen.ImportWallet -> ImportWalletScreen(viewModel)
         is Screen.BackupPhrase -> BackupPhraseScreen(viewModel)

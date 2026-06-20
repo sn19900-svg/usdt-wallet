@@ -21,7 +21,7 @@ import java.math.BigInteger
  */
 object TronTransactionSigner {
 
-    private val api = TronApiClient.create()
+    private val api get() = TronApiClient.create()
     private const val TAG = "TronSigner"
 
     private val curveParams = SECNamedCurves.getByName("secp256k1")

@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 
 sealed class Screen {
     object Splash : Screen()
+    object Lock : Screen()
     object CreateWallet : Screen()
     object ImportWallet : Screen()
     object BackupPhrase : Screen()
@@ -36,7 +37,9 @@ data class WalletUiState(
     val sendTxId: String = "",
     val updateAvailable: Boolean = false,
     val updateVersion: String = "",
-    val updateDownloadUrl: String = ""
+    val updateDownloadUrl: String = "",
+    val isUnlocked: Boolean = false,
+    val isTestnet: Boolean = true
 )
 
 class WalletViewModel(application: Application) : AndroidViewModel(application) {
@@ -44,8 +47,17 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     private val secureStorage = SecureStorage(application)
     private val repository = WalletRepository()
 
-    private val _uiState = MutableStateFlow(WalletUiState())
+    private val _uiState = MutableStateFlow(WalletUiState(isTestnet = NetworkConfig.isTestnet))
     val uiState: StateFlow<WalletUiState> = _uiState.asStateFlow()
+
+    // ─── تبديل الشبكة (تجربة وهمية / حقيقية) ─────────────
+
+    fun toggleNetwork() {
+        val newValue = !NetworkConfig.isTestnet
+        NetworkConfig.setTestnet(newValue)
+        _uiState.update { it.copy(isTestnet = newValue) }
+        refreshBalance()
+    }
 
     init {
         checkWalletExists()
@@ -73,12 +85,16 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         if (secureStorage.isWalletCreated()) {
             val address = secureStorage.getAddress() ?: ""
             _uiState.update {
-                it.copy(address = address, currentScreen = Screen.Home)
+                it.copy(address = address, currentScreen = Screen.Lock)
             }
-            refreshBalance()
         } else {
             _uiState.update { it.copy(currentScreen = Screen.CreateWallet) }
         }
+    }
+
+    fun onUnlocked() {
+        _uiState.update { it.copy(isUnlocked = true, currentScreen = Screen.Home) }
+        refreshBalance()
     }
 
     // ─── إنشاء محفظة جديدة ────────────────────────────────

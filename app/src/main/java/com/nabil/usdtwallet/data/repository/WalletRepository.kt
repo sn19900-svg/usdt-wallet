@@ -25,7 +25,7 @@ sealed class Result<out T> {
 
 class WalletRepository {
 
-    private val api = TronApiClient.create()
+    private val api get() = TronApiClient.create()
     private val TAG = "WalletRepository"
 
     suspend fun getBalance(address: String): Result<WalletBalance> {

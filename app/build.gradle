@@ -101,6 +101,10 @@ dependencies {
     // MultiDex
     implementation 'androidx.multidex:multidex:2.0.1'
 
+    // Biometric authentication (بصمة / PIN / نمط النظام)
+    implementation 'androidx.biometric:biometric:1.1.0'
+    implementation 'androidx.fragment:fragment-ktx:1.6.2'
+
     debugImplementation 'androidx.compose.ui:ui-tooling'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'
 }
