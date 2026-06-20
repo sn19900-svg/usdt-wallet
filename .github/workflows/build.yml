@@ -46,15 +46,10 @@ jobs:
           echo "Checking signature..."
           unzip -l "$APK_PATH" | grep -i "\.RSA\|\.SF\|\.DSA\|MANIFEST.MF" || echo "WARNING: No signature files found, will sign manually"
 
-      - name: Create debug keystore if needed
+      - name: Restore persistent keystore
         run: |
-          if [ ! -f ~/.android/debug.keystore ]; then
-            mkdir -p ~/.android
-            keytool -genkey -v -keystore ~/.android/debug.keystore \
-              -storepass android -alias androiddebugkey -keypass android \
-              -keyalg RSA -keysize 2048 -validity 10000 \
-              -dname "CN=Android Debug,O=Android,C=US"
-          fi
+          mkdir -p ~/.android
+          echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 -d > ~/.android/debug.keystore
 
       - name: Manually sign APK with apksigner
         run: |
@@ -70,9 +65,9 @@ jobs:
 
           "$APKSIGNER" sign \
             --ks ~/.android/debug.keystore \
-            --ks-pass pass:android \
-            --ks-key-alias androiddebugkey \
-            --key-pass pass:android \
+            --ks-pass pass:android123 \
+            --ks-key-alias usdtwalletkey \
+            --key-pass pass:android123 \
             --out "$APK_OUT" \
             "$APK_ALIGNED"
 
