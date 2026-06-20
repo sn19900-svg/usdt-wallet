@@ -93,8 +93,8 @@ interface TronApiService {
 object TronApiClient {
 
     const val USDT_CONTRACT_TRC20_MAINNET = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
-    // عقد USDT التجريبي الرسمي على شبكة Nile Testnet
-    const val USDT_CONTRACT_TRC20_TESTNET = "TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj"
+    // عقد USDT التجريبي الرسمي على شبكة Nile Testnet (تم التحقق منه مباشرة من البلوكتشين)
+    const val USDT_CONTRACT_TRC20_TESTNET = "TXYZopYRdj2D9XRtbG411XZZ3kM5VkAeBf"
 
     private const val MAINNET_URL = "https://api.trongrid.io/"
     private const val TESTNET_URL = "https://nile.trongrid.io/"
