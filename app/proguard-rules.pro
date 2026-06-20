@@ -30,3 +30,10 @@
 -keepclassmembers class com.nabil.usdtwallet.data.repository.** {
     <fields>;
 }
+
+# Google Tink (تستخدمها EncryptedSharedPreferences) تحتاج annotations اختيارية فقط للتوثيق
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn javax.annotation.**
+-dontwarn org.checkerframework.**
+-keep class com.google.crypto.tink.** { *; }
+-dontwarn com.google.crypto.tink.**
