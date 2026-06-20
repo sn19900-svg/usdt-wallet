@@ -11,9 +11,15 @@ android {
         applicationId "com.nabil.myapp101"
         minSdk 26
         targetSdk 34
-        versionCode 1
+        versionCode System.getenv("GITHUB_RUN_NUMBER") ? System.getenv("GITHUB_RUN_NUMBER").toInteger() : 1
         versionName "1.0.0"
         multiDexEnabled true
+        buildConfigField "int", "BUILD_NUMBER", "${System.getenv('GITHUB_RUN_NUMBER') ?: '1'}"
+    }
+
+    buildFeatures {
+        compose true
+        buildConfig true
     }
 
     buildTypes {
@@ -36,10 +42,6 @@ android {
 
     kotlinOptions {
         jvmTarget = '17'
-    }
-
-    buildFeatures {
-        compose true
     }
 
     composeOptions {

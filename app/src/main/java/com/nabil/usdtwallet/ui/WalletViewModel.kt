@@ -3,6 +3,7 @@ package com.nabil.usdtwallet.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.nabil.usdtwallet.BuildConfig
 import com.nabil.usdtwallet.data.repository.*
 import com.nabil.usdtwallet.domain.usecase.TronTransactionSigner
 import com.nabil.usdtwallet.domain.wallet.WalletManager
@@ -32,7 +33,10 @@ data class WalletUiState(
     val currentScreen: Screen = Screen.Splash,
     val mnemonic: List<String> = emptyList(),
     val sendSuccess: Boolean = false,
-    val sendTxId: String = ""
+    val sendTxId: String = "",
+    val updateAvailable: Boolean = false,
+    val updateVersion: String = "",
+    val updateDownloadUrl: String = ""
 )
 
 class WalletViewModel(application: Application) : AndroidViewModel(application) {
@@ -45,6 +49,24 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         checkWalletExists()
+        checkForUpdate()
+    }
+
+    // ─── التحقق من وجود تحديث ─────────────────────────────
+
+    private fun checkForUpdate() {
+        viewModelScope.launch {
+            val info = UpdateChecker.checkForUpdate(BuildConfig.BUILD_NUMBER)
+            if (info.isUpdateAvailable) {
+                _uiState.update {
+                    it.copy(
+                        updateAvailable = true,
+                        updateVersion = info.latestVersion,
+                        updateDownloadUrl = info.downloadUrl
+                    )
+                }
+            }
+        }
     }
 
     private fun checkWalletExists() {

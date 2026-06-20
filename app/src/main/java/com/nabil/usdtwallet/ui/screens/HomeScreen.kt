@@ -1,5 +1,7 @@
 package com.nabil.usdtwallet.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -13,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,6 +29,7 @@ import com.nabil.usdtwallet.ui.theme.*
 fun HomeScreen(viewModel: WalletViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
     var addressCopied by remember { mutableStateOf(false) }
 
     Column(
@@ -34,6 +38,42 @@ fun HomeScreen(viewModel: WalletViewModel) {
             .background(CryptoDark)
             .verticalScroll(rememberScrollState())
     ) {
+        // ─── Update Banner ────────────────────────────────────
+        if (uiState.updateAvailable) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(CryptoGreen)
+                    .clickable {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uiState.updateDownloadUrl))
+                        context.startActivity(intent)
+                    }
+                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        "تحديث جديد متاح (${uiState.updateVersion})",
+                        color = CryptoDark,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "اضغط هنا للتحميل",
+                        color = CryptoDark.copy(alpha = 0.8f),
+                        fontSize = 11.sp
+                    )
+                }
+                Icon(
+                    Icons.Default.Download,
+                    contentDescription = "تحديث",
+                    tint = CryptoDark,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
         // ─── Header Card ─────────────────────────────────────
         Box(
             modifier = Modifier
