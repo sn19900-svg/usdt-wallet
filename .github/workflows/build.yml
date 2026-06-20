@@ -40,6 +40,46 @@ jobs:
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon
 
+      - name: Verify APK is signed
+        run: |
+          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+          echo "Checking signature..."
+          unzip -l "$APK_PATH" | grep -i "\.RSA\|\.SF\|\.DSA\|MANIFEST.MF" || echo "WARNING: No signature files found, will sign manually"
+
+      - name: Create debug keystore if needed
+        run: |
+          if [ ! -f ~/.android/debug.keystore ]; then
+            mkdir -p ~/.android
+            keytool -genkey -v -keystore ~/.android/debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+      - name: Manually sign APK with apksigner
+        run: |
+          BUILD_TOOLS=$(ls $ANDROID_HOME/build-tools/ | sort -V | tail -1)
+          APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
+          ZIPALIGN="$ANDROID_HOME/build-tools/$BUILD_TOOLS/zipalign"
+
+          APK_IN="app/build/outputs/apk/debug/app-debug.apk"
+          APK_ALIGNED="app/build/outputs/apk/debug/app-debug-aligned.apk"
+          APK_OUT="app/build/outputs/apk/debug/app-debug-signed.apk"
+
+          "$ZIPALIGN" -p -f 4 "$APK_IN" "$APK_ALIGNED"
+
+          "$APKSIGNER" sign \
+            --ks ~/.android/debug.keystore \
+            --ks-pass pass:android \
+            --ks-key-alias androiddebugkey \
+            --key-pass pass:android \
+            --out "$APK_OUT" \
+            "$APK_ALIGNED"
+
+          "$APKSIGNER" verify "$APK_OUT" && echo "✅ APK signed and verified successfully"
+
+          cp "$APK_OUT" app/build/outputs/apk/debug/app-debug.apk
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
