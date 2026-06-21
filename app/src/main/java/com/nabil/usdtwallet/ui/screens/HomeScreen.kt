@@ -159,6 +159,16 @@ fun HomeScreen(viewModel: WalletViewModel) {
                     fontSize = 13.sp
                 )
 
+                uiState.errorMessage?.let { error ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = "⚠️ $error",
+                        color = CryptoRed,
+                        fontSize = 12.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
                 Spacer(Modifier.height(16.dp))
 
                 // عنوان المحفظة
