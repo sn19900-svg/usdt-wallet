@@ -40,7 +40,7 @@ object TronTransactionSigner {
             val triggerRequest = TronTransactionRequest(
                 ownerAddress = fromAddress,
                 toAddress = toAddress,
-                contractAddress = USDT_CONTRACT_TRC20,
+                contractAddress = TronApiClient.USDT_CONTRACT_TRC20,
                 functionSelector = "transfer(address,uint256)",
                 parameter = parameter,
                 feeLimit = 15_000_000L,

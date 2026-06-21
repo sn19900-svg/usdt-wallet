@@ -38,8 +38,8 @@ class WalletRepository {
 
                 // USDT TRC-20 balance
                 val usdtBalance = account.trc20
-                    .find { it.containsKey(USDT_CONTRACT_TRC20) }
-                    ?.get(USDT_CONTRACT_TRC20)
+                    .find { it.containsKey(TronApiClient.USDT_CONTRACT_TRC20) }
+                    ?.get(TronApiClient.USDT_CONTRACT_TRC20)
                     ?.toLongOrNull()
                     ?.let { it / 1_000_000.0 } // USDT يملك 6 decimals
                     ?: 0.0
@@ -55,7 +55,10 @@ class WalletRepository {
     suspend fun getTransactions(address: String): Result<List<Transaction>> {
         return withContext(Dispatchers.IO) {
             try {
-                val response = api.getTrc20Transactions(address)
+                val response = api.getTrc20Transactions(
+                    address = address,
+                    contractAddress = TronApiClient.USDT_CONTRACT_TRC20
+                )
                 val txList = response.data.map { item ->
                     Transaction(
                         txId = item.txId,

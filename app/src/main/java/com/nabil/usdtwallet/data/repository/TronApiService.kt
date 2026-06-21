@@ -84,7 +84,7 @@ interface TronApiService {
     suspend fun getTrc20Transactions(
         @Path("address") address: String,
         @Query("limit") limit: Int = 20,
-        @Query("contract_address") contractAddress: String = USDT_CONTRACT_TRC20
+        @Query("contract_address") contractAddress: String
     ): TronTxListResponse
 }
 
@@ -146,4 +146,5 @@ object NetworkConfig {
     }
 }
 
-const val USDT_CONTRACT_TRC20 = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
+// ملاحظة: تم حذف الثابت القديم المكرر USDT_CONTRACT_TRC20 من هنا
+// الآن الاستخدام الوحيد هو TronApiClient.USDT_CONTRACT_TRC20 الديناميكي (testnet/mainnet)
