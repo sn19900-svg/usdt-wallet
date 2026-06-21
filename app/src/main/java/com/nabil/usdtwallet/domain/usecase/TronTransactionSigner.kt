@@ -76,6 +76,45 @@ object TronTransactionSigner {
         }
     }
 
+    suspend fun sendTrx(
+        fromAddress: String,
+        toAddress: String,
+        amountTrx: Double,
+        privateKeyHex: String
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val amountSun = (amountTrx * 1_000_000).toLong()
+
+            val request = TrxTransferRequest(
+                ownerAddress = fromAddress,
+                toAddress = toAddress,
+                amount = amountSun,
+                visible = true
+            )
+
+            val createResponse = api.createTrxTransaction(request)
+            val transaction = createResponse.transaction
+                ?: return@withContext Result.Error("لم يتم استلام بيانات المعاملة")
+
+            // معاملة TRX المباشرة لا تحتوي result.result لأنها ليست عقداً ذكياً
+            val signedTx = signTransaction(transaction, privateKeyHex)
+            val broadcastResponse = api.broadcastTransaction(signedTx)
+
+            if (broadcastResponse.result) {
+                val txId = broadcastResponse.txId ?: ""
+                Log.i(TAG, "✅ تم إرسال TRX: $txId")
+                Result.Success(txId)
+            } else {
+                val msg = broadcastResponse.message ?: "فشل البث"
+                Log.e(TAG, "Broadcast TRX failed: $msg")
+                Result.Error("فشل الإرسال: $msg")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "خطأ في إرسال TRX: ${e.message}", e)
+            Result.Error("خطأ: ${e.message}")
+        }
+    }
+
     private fun buildTransferParameter(toAddress: String, amountSun: Long): String {
         val addressBytes = base58ToBytes(toAddress)
         val addressHex = bytesToHex(addressBytes.drop(1).toByteArray())

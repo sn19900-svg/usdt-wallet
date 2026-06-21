@@ -237,6 +237,29 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun sendTrx(toAddress: String, amount: Double) {
+        val privateKey = secureStorage.getPrivateKey() ?: run {
+            _uiState.update { it.copy(errorMessage = "لم يتم العثور على المفتاح الخاص") }
+            return
+        }
+        val fromAddress = _uiState.value.address
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            when (val result = TronTransactionSigner.sendTrx(fromAddress, toAddress, amount, privateKey)) {
+                is Result.Success -> {
+                    _uiState.update {
+                        it.copy(isLoading = false, sendSuccess = true, sendTxId = result.data)
+                    }
+                    refreshBalance()
+                }
+                is Result.Error -> _uiState.update {
+                    it.copy(isLoading = false, errorMessage = result.message)
+                }
+            }
+        }
+    }
+
     // ─── حذف المحفظة ──────────────────────────────────────
 
     fun deleteWallet() {

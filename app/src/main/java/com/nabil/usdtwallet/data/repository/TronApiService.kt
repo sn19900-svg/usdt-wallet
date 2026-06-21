@@ -67,6 +67,13 @@ data class TronTxItem(
     @SerializedName("type") val type: String = ""
 )
 
+data class TrxTransferRequest(
+    @SerializedName("owner_address") val ownerAddress: String,
+    @SerializedName("to_address") val toAddress: String,
+    @SerializedName("amount") val amount: Long,
+    @SerializedName("visible") val visible: Boolean = true
+)
+
 // ─── API Interface ─────────────────────────────────────────
 
 interface TronApiService {
@@ -75,6 +82,11 @@ interface TronApiService {
     suspend fun getAccount(
         @Path("address") address: String
     ): TronAccountWrapperResponse
+
+    @POST("wallet/createtransaction")
+    suspend fun createTrxTransaction(
+        @Body request: TrxTransferRequest
+    ): TronTransactionResponse
 
     @POST("wallet/triggersmartcontract")
     suspend fun triggerSmartContract(

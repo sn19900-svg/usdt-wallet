@@ -70,6 +70,8 @@
 
 # Models التي تُسلسَل بـ Gson - نمنع R8 من تغيير الحقول أو البنية
 -keep class com.nabil.usdtwallet.data.repository.TronAccountResponse { *; }
+-keep class com.nabil.usdtwallet.data.repository.TronAccountWrapperResponse { *; }
+-keep class com.nabil.usdtwallet.data.repository.TrxTransferRequest { *; }
 -keep class com.nabil.usdtwallet.data.repository.TronTransactionRequest { *; }
 -keep class com.nabil.usdtwallet.data.repository.TronTransactionResponse { *; }
 -keep class com.nabil.usdtwallet.data.repository.TronResult { *; }
