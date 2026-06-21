@@ -86,7 +86,7 @@ interface TronApiService {
     @POST("wallet/createtransaction")
     suspend fun createTrxTransaction(
         @Body request: TrxTransferRequest
-    ): TronTransactionResponse
+    ): com.google.gson.JsonObject
 
     @POST("wallet/triggersmartcontract")
     suspend fun triggerSmartContract(
