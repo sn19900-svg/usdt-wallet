@@ -92,11 +92,14 @@ object TronTransactionSigner {
                 visible = true
             )
 
-            val createResponse = api.createTrxTransaction(request)
-            val transaction = createResponse.transaction
-                ?: return@withContext Result.Error("لم يتم استلام بيانات المعاملة")
+            // createtransaction يُرجع الـ transaction مباشرة (بدون غلاف "transaction":)
+            val transaction = api.createTrxTransaction(request)
 
-            // معاملة TRX المباشرة لا تحتوي result.result لأنها ليست عقداً ذكياً
+            if (!transaction.has("txID")) {
+                val errorMsg = if (transaction.has("Error")) transaction.get("Error").asString else "فشل في إنشاء المعاملة - تحقق من الرصيد"
+                return@withContext Result.Error(errorMsg)
+            }
+
             val signedTx = signTransaction(transaction, privateKeyHex)
             val broadcastResponse = api.broadcastTransaction(signedTx)
 
@@ -117,7 +120,10 @@ object TronTransactionSigner {
 
     private fun buildTransferParameter(toAddress: String, amountSun: Long): String {
         val addressBytes = base58ToBytes(toAddress)
-        val addressHex = bytesToHex(addressBytes.drop(1).toByteArray())
+        // addressBytes = 25 بايت: [0]=بادئة 0x41, [1..20]=العنوان الفعلي (20 بايت), [21..24]=checksum (4 بايت)
+        // يجب أخذ فقط البايتات 1 إلى 20 (20 بايت)، وليس drop(1) التي كانت تُبقي الـ checksum بالخطأ
+        val pureAddressBytes = addressBytes.copyOfRange(1, 21)
+        val addressHex = bytesToHex(pureAddressBytes)
         val paddedAddress = addressHex.padStart(64, '0')
         val amountHex = amountSun.toString(16)
         val paddedAmount = amountHex.padStart(64, '0')
