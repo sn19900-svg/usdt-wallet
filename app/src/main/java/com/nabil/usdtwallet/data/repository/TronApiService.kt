@@ -1,5 +1,6 @@
 package com.nabil.usdtwallet.data.repository
 
+import com.google.gson.JsonArray
 import com.google.gson.annotations.SerializedName
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
@@ -12,7 +13,7 @@ import java.util.concurrent.TimeUnit
 
 data class TronAccountResponse(
     @SerializedName("balance") val trxBalance: Long = 0,
-    @SerializedName("trc20") val trc20: List<Map<String, String>> = emptyList()
+    @SerializedName("trc20") val trc20: JsonArray? = null
 )
 
 data class TronTransactionRequest(

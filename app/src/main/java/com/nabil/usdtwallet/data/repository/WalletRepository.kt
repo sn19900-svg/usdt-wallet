@@ -36,13 +36,16 @@ class WalletRepository {
                 // TRX balance (من sun إلى TRX، 1 TRX = 1,000,000 sun)
                 val trxBalance = account.trxBalance / 1_000_000.0
 
-                // USDT TRC-20 balance
-                val usdtBalance = account.trc20
-                    .find { it.containsKey(TronApiClient.USDT_CONTRACT_TRC20) }
-                    ?.get(TronApiClient.USDT_CONTRACT_TRC20)
-                    ?.toLongOrNull()
-                    ?.let { it / 1_000_000.0 } // USDT يملك 6 decimals
-                    ?: 0.0
+                // USDT TRC-20 balance - تفكيك JsonArray يدوياً (آمن من مشاكل R8/Generics)
+                var usdtBalance = 0.0
+                val targetContract = TronApiClient.USDT_CONTRACT_TRC20
+                account.trc20?.forEach { element ->
+                    val obj = element.asJsonObject
+                    if (obj.has(targetContract)) {
+                        val raw = obj.get(targetContract).asString
+                        usdtBalance = raw.toLongOrNull()?.div(1_000_000.0) ?: 0.0
+                    }
+                }
 
                 Result.Success(WalletBalance(usdt = usdtBalance, trx = trxBalance))
             } catch (e: Exception) {
