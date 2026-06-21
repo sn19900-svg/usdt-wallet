@@ -39,6 +39,7 @@ class WalletRepository {
                 // USDT TRC-20 balance - تفكيك JsonArray يدوياً (آمن من مشاكل R8/Generics)
                 var usdtBalance = 0.0
                 val targetContract = TronApiClient.USDT_CONTRACT_TRC20
+                val trc20Size = account.trc20?.size() ?: -1
                 account.trc20?.forEach { element ->
                     val obj = element.asJsonObject
                     if (obj.has(targetContract)) {
@@ -47,10 +48,19 @@ class WalletRepository {
                     }
                 }
 
+                Log.i(TAG, "balance=$trxBalance trc20Size=$trc20Size contract=$targetContract usdt=$usdtBalance")
+
+                if (trxBalance == 0.0 && usdtBalance == 0.0) {
+                    // تشخيص مؤقت: نُظهر تفاصيل الاستجابة الخام لمعرفة سبب القيم الصفرية
+                    return@withContext Result.Error(
+                        "DEBUG: trxRaw=${account.trxBalance} trc20Size=$trc20Size contract=${targetContract.take(10)}.."
+                    )
+                }
+
                 Result.Success(WalletBalance(usdt = usdtBalance, trx = trxBalance))
             } catch (e: Exception) {
-                Log.e(TAG, "خطأ في جلب الرصيد: ${e.message}")
-                Result.Error("تعذّر جلب الرصيد: ${e.message}")
+                Log.e(TAG, "خطأ في جلب الرصيد: ${e.javaClass.simpleName}: ${e.message}")
+                Result.Error("${e.javaClass.simpleName}: ${e.message}")
             }
         }
     }

@@ -159,6 +159,13 @@ fun HomeScreen(viewModel: WalletViewModel) {
                     fontSize = 13.sp
                 )
 
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = "Build #${com.nabil.usdtwallet.BuildConfig.BUILD_NUMBER}",
+                    color = CryptoGray.copy(alpha = 0.5f),
+                    fontSize = 10.sp
+                )
+
                 uiState.errorMessage?.let { error ->
                     Spacer(Modifier.height(8.dp))
                     Text(
