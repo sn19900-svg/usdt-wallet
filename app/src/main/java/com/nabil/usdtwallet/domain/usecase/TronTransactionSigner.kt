@@ -124,12 +124,11 @@ object TronTransactionSigner {
         return paddedAddress + paddedAmount
     }
 
-    @Suppress("UNCHECKED_CAST")
     private fun signTransaction(
-        transaction: Map<String, Any>,
+        transaction: com.google.gson.JsonObject,
         privateKeyHex: String
-    ): Map<String, Any> {
-        val txId = transaction["txID"] as? String
+    ): com.google.gson.JsonObject {
+        val txId = transaction.get("txID")?.asString
             ?: throw IllegalStateException("txID غير موجود")
 
         val txBytes = hexToBytes(txId)
@@ -156,8 +155,10 @@ object TronTransactionSigner {
 
         val sigHex = bytesToHex(rBytes + sBytes + vByte)
 
-        val signedTx = transaction.toMutableMap()
-        signedTx["signature"] = listOf(sigHex)
+        val signedTx = transaction.deepCopy()
+        val sigArray = com.google.gson.JsonArray()
+        sigArray.add(sigHex)
+        signedTx.add("signature", sigArray)
 
         return signedTx
     }

@@ -34,7 +34,7 @@ data class TronTransactionRequest(
 
 data class TronTransactionResponse(
     @SerializedName("result") val result: TronResult? = null,
-    @SerializedName("transaction") val transaction: Map<String, Any>? = null,
+    @SerializedName("transaction") val transaction: com.google.gson.JsonObject? = null,
     @SerializedName("txID") val txId: String? = null
 )
 
@@ -95,7 +95,7 @@ interface TronApiService {
 
     @POST("wallet/broadcasttransaction")
     suspend fun broadcastTransaction(
-        @Body transaction: Map<String, Any>
+        @Body transaction: com.google.gson.JsonObject
     ): TronBroadcastResponse
 
     @GET("v1/accounts/{address}/transactions/trc20")
