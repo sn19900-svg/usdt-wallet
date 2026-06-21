@@ -1,5 +1,6 @@
 -keep class com.nabil.usdtwallet.data.repository.** { *; }
 -keep class com.nabil.usdtwallet.domain.** { *; }
+-keepclassmembers class com.nabil.usdtwallet.** { *; }
 
 # BouncyCastle: لا نحتفظ بالمكتبة كاملة، فقط نمنع تحذيرات البناء
 # هذا يسمح لـ R8 بحذف آلاف الـ classes غير المستخدمة (تقليل classes.dex بشكل كبير)
@@ -45,3 +46,36 @@
 -keep class * implements com.google.gson.TypeAdapterFactory
 -keep class * implements com.google.gson.JsonSerializer
 -keep class * implements com.google.gson.JsonDeserializer
+
+# Retrofit + OkHttp + Coroutines - القواعد الرسمية الموصى بها لـ R8
+# المرجع: https://github.com/square/retrofit/blob/master/retrofit/src/main/resources/META-INF/proguard/retrofit2.pro
+-keepattributes Exceptions
+-keepattributes InnerClasses
+-keepattributes EnclosingMethod
+-keepattributes RuntimeVisibleAnnotations
+-keepattributes RuntimeVisibleParameterAnnotations
+
+-keepclasseswithmembers class * {
+    @retrofit2.http.* <methods>;
+}
+
+-keep,allowobfuscation,allowshrinking interface retrofit2.Call
+-keep,allowobfuscation,allowshrinking class kotlin.coroutines.Continuation
+-keep,allowobfuscation,allowshrinking class retrofit2.Response
+
+-dontwarn javax.annotation.**
+-dontwarn kotlin.Unit
+-dontwarn retrofit2.KotlinExtensions
+-dontwarn retrofit2.KotlinExtensions$*
+
+# Models التي تُسلسَل بـ Gson - نمنع R8 من تغيير الحقول أو البنية
+-keep class com.nabil.usdtwallet.data.repository.TronAccountResponse { *; }
+-keep class com.nabil.usdtwallet.data.repository.TronAccountWrapperResponse { *; }
+-keep class com.nabil.usdtwallet.data.repository.TronTransactionRequest { *; }
+-keep class com.nabil.usdtwallet.data.repository.TronTransactionResponse { *; }
+-keep class com.nabil.usdtwallet.data.repository.TronResult { *; }
+-keep class com.nabil.usdtwallet.data.repository.TronBroadcastRequest { *; }
+-keep class com.nabil.usdtwallet.data.repository.TronBroadcastResponse { *; }
+-keep class com.nabil.usdtwallet.data.repository.TronTxListResponse { *; }
+-keep class com.nabil.usdtwallet.data.repository.TronTxItem { *; }
+-keep interface com.nabil.usdtwallet.data.repository.TronApiService { *; }

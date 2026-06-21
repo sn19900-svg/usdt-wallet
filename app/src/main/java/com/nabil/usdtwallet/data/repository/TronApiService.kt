@@ -11,6 +11,11 @@ import java.util.concurrent.TimeUnit
 
 // ─── Models ───────────────────────────────────────────────
 
+data class TronAccountWrapperResponse(
+    @SerializedName("data") val data: List<TronAccountResponse> = emptyList(),
+    @SerializedName("success") val success: Boolean = false
+)
+
 data class TronAccountResponse(
     @SerializedName("balance") val trxBalance: Long = 0,
     @SerializedName("trc20") val trc20: JsonArray? = null
@@ -69,7 +74,7 @@ interface TronApiService {
     @GET("v1/accounts/{address}")
     suspend fun getAccount(
         @Path("address") address: String
-    ): TronAccountResponse
+    ): TronAccountWrapperResponse
 
     @POST("wallet/triggersmartcontract")
     suspend fun triggerSmartContract(

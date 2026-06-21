@@ -31,7 +31,13 @@ class WalletRepository {
     suspend fun getBalance(address: String): Result<WalletBalance> {
         return withContext(Dispatchers.IO) {
             try {
-                val account = api.getAccount(address)
+                val wrapper = api.getAccount(address)
+                val account = wrapper.data.firstOrNull()
+
+                if (account == null) {
+                    // الحساب جديد ولم يُفعَّل بعد على الشبكة (لا يوجد أي معاملة واردة بعد)
+                    return@withContext Result.Success(WalletBalance(usdt = 0.0, trx = 0.0))
+                }
 
                 // TRX balance (من sun إلى TRX، 1 TRX = 1,000,000 sun)
                 val trxBalance = account.trxBalance / 1_000_000.0
@@ -39,22 +45,12 @@ class WalletRepository {
                 // USDT TRC-20 balance - تفكيك JsonArray يدوياً (آمن من مشاكل R8/Generics)
                 var usdtBalance = 0.0
                 val targetContract = TronApiClient.USDT_CONTRACT_TRC20
-                val trc20Size = account.trc20?.size() ?: -1
                 account.trc20?.forEach { element ->
                     val obj = element.asJsonObject
                     if (obj.has(targetContract)) {
                         val raw = obj.get(targetContract).asString
                         usdtBalance = raw.toLongOrNull()?.div(1_000_000.0) ?: 0.0
                     }
-                }
-
-                Log.i(TAG, "balance=$trxBalance trc20Size=$trc20Size contract=$targetContract usdt=$usdtBalance")
-
-                if (trxBalance == 0.0 && usdtBalance == 0.0) {
-                    // تشخيص مؤقت: نُظهر تفاصيل الاستجابة الخام لمعرفة سبب القيم الصفرية
-                    return@withContext Result.Error(
-                        "DEBUG: trxRaw=${account.trxBalance} trc20Size=$trc20Size contract=${targetContract.take(10)}.."
-                    )
                 }
 
                 Result.Success(WalletBalance(usdt = usdtBalance, trx = trxBalance))
