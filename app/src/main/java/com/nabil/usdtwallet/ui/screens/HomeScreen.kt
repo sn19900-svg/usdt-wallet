@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.nabil.usdtwallet.ui.ActiveChain
 import com.nabil.usdtwallet.ui.Screen
 import com.nabil.usdtwallet.ui.WalletViewModel
 import com.nabil.usdtwallet.ui.theme.*
@@ -33,6 +35,13 @@ fun HomeScreen(viewModel: WalletViewModel) {
     val context = LocalContext.current
     var addressCopied by remember { mutableStateOf(false) }
     var showNetworkSwitchConfirm by remember { mutableStateOf(false) }
+
+    // العنوان الحالي حسب السلسلة النشطة
+    val currentAddress = if (uiState.activeChain == ActiveChain.TRON)
+        uiState.address else uiState.bscAddress
+
+    // ألوان السلسلة النشطة
+    val chainColor = if (uiState.activeChain == ActiveChain.TRON) CryptoRed else CryptoYellow
 
     if (showNetworkSwitchConfirm) {
         NetworkSwitchDialog(
@@ -60,14 +69,12 @@ fun HomeScreen(viewModel: WalletViewModel) {
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    if (uiState.isTestnet) "🧪 وضع التجربة (أموال وهمية)" else "⚠️ وضع حقيقي (أموال فعلية)",
-                    color = if (uiState.isTestnet) CryptoYellow else CryptoRed,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Text(
+                if (uiState.isTestnet) "🧪 وضع التجربة (أموال وهمية)" else "⚠️ وضع حقيقي (أموال فعلية)",
+                color = if (uiState.isTestnet) CryptoYellow else CryptoRed,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
             TextButton(onClick = { showNetworkSwitchConfirm = true }) {
                 Text(
                     if (uiState.isTestnet) "التبديل لحقيقي" else "التبديل لتجريبي",
@@ -75,6 +82,31 @@ fun HomeScreen(viewModel: WalletViewModel) {
                     fontSize = 12.sp
                 )
             }
+        }
+
+        // ─── Chain Selector (Tron / BSC) ──────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 12.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(CryptoDarkCard),
+            horizontalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            ChainTab(
+                label = "🔴 Tron TRC-20",
+                selected = uiState.activeChain == ActiveChain.TRON,
+                color = CryptoRed,
+                modifier = Modifier.weight(1f),
+                onClick = { viewModel.switchChain(ActiveChain.TRON) }
+            )
+            ChainTab(
+                label = "🟡 BSC BEP-20",
+                selected = uiState.activeChain == ActiveChain.BSC,
+                color = CryptoYellow,
+                modifier = Modifier.weight(1f),
+                onClick = { viewModel.switchChain(ActiveChain.BSC) }
+            )
         }
 
         // ─── Update Banner ────────────────────────────────────
@@ -98,32 +130,18 @@ fun HomeScreen(viewModel: WalletViewModel) {
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
-                    Text(
-                        "اضغط هنا للتحميل",
-                        color = CryptoDark.copy(alpha = 0.8f),
-                        fontSize = 11.sp
-                    )
+                    Text("اضغط هنا للتحميل", color = CryptoDark.copy(alpha = 0.8f), fontSize = 11.sp)
                 }
-                Icon(
-                    Icons.Default.Download,
-                    contentDescription = "تحديث",
-                    tint = CryptoDark,
-                    modifier = Modifier.size(20.dp)
-                )
+                Icon(Icons.Default.Download, contentDescription = "تحديث", tint = CryptoDark, modifier = Modifier.size(20.dp))
             }
         }
 
-        // ─── Header Card ─────────────────────────────────────
+        // ─── Header Card ──────────────────────────────────────
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            CryptoGreen.copy(alpha = 0.2f),
-                            CryptoDark
-                        )
-                    )
+                    Brush.verticalGradient(listOf(chainColor.copy(alpha = 0.2f), CryptoDark))
                 )
                 .padding(horizontal = 24.dp, vertical = 32.dp)
         ) {
@@ -133,11 +151,14 @@ fun HomeScreen(viewModel: WalletViewModel) {
                 Spacer(Modifier.height(8.dp))
 
                 if (uiState.isLoading) {
-                    CircularProgressIndicator(color = CryptoGreen, modifier = Modifier.size(32.dp))
+                    CircularProgressIndicator(color = chainColor, modifier = Modifier.size(32.dp))
                 } else {
+                    val usdtBalance = if (uiState.activeChain == ActiveChain.TRON)
+                        uiState.usdtBalance else uiState.bscUsdtBalance
+
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            text = String.format("%.2f", uiState.usdtBalance),
+                            text = String.format("%.2f", usdtBalance),
                             fontSize = 46.sp,
                             fontWeight = FontWeight.Bold,
                             color = CryptoWhite
@@ -146,27 +167,24 @@ fun HomeScreen(viewModel: WalletViewModel) {
                         Text(
                             text = "USDT",
                             fontSize = 18.sp,
-                            color = CryptoGreen,
+                            color = chainColor,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
                     }
                 }
 
                 Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "TRX: ${String.format("%.2f", uiState.trxBalance)}",
-                    color = CryptoGray,
-                    fontSize = 13.sp
-                )
+
+                // رصيد العملة الأصلية (TRX أو BNB)
+                val nativeLabel = if (uiState.activeChain == ActiveChain.TRON)
+                    "TRX: ${String.format("%.2f", uiState.trxBalance)}"
+                else
+                    "BNB: ${String.format("%.4f", uiState.bnbBalance)}"
+                Text(text = nativeLabel, color = CryptoGray, fontSize = 13.sp)
 
                 uiState.errorMessage?.let { error ->
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = "⚠️ $error",
-                        color = CryptoRed,
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center
-                    )
+                    Text("⚠️ $error", color = CryptoRed, fontSize = 12.sp, textAlign = TextAlign.Center)
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -177,7 +195,7 @@ fun HomeScreen(viewModel: WalletViewModel) {
                         .clip(RoundedCornerShape(20.dp))
                         .background(CryptoDarkCard)
                         .clickable {
-                            clipboard.setText(AnnotatedString(uiState.address))
+                            clipboard.setText(AnnotatedString(currentAddress))
                             addressCopied = true
                         }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -185,9 +203,9 @@ fun HomeScreen(viewModel: WalletViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = if (uiState.address.length > 16)
-                            "${uiState.address.take(8)}...${uiState.address.takeLast(6)}"
-                        else uiState.address,
+                        text = if (currentAddress.length > 16)
+                            "${currentAddress.take(8)}...${currentAddress.takeLast(6)}"
+                        else currentAddress,
                         color = CryptoGray,
                         fontSize = 13.sp
                     )
@@ -276,7 +294,7 @@ fun HomeScreen(viewModel: WalletViewModel) {
             uiState.transactions.take(3).forEach { tx ->
                 TransactionItem(
                     tx = tx,
-                    myAddress = uiState.address,
+                    myAddress = currentAddress,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
                 )
             }
@@ -294,21 +312,56 @@ fun HomeScreen(viewModel: WalletViewModel) {
                 .padding(14.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            NetworkStat("الشبكة", "Tron TRC-20")
-            NetworkStat("العملة", "USDT")
-            NetworkStat("الرسوم", "~1 USDT")
+            if (uiState.activeChain == ActiveChain.TRON) {
+                NetworkStat("الشبكة", "Tron TRC-20")
+                NetworkStat("العملة", "USDT")
+                NetworkStat("الرسوم", "~1 TRX")
+            } else {
+                NetworkStat("الشبكة", "BSC BEP-20")
+                NetworkStat("العملة", "USDT")
+                NetworkStat("الرسوم", "~0.001 BNB")
+            }
         }
 
         Spacer(Modifier.height(80.dp))
     }
 }
 
+// ─── Chain Tab ────────────────────────────────────────────
+
+@Composable
+private fun ChainTab(
+    label: String,
+    selected: Boolean,
+    color: Color,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) color.copy(alpha = 0.2f) else Color.Transparent)
+            .clickable(onClick = onClick)
+            .padding(vertical = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = if (selected) color else CryptoGray,
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+        )
+    }
+}
+
+// ─── Action Button ────────────────────────────────────────
+
 @Composable
 private fun ActionButton(
     modifier: Modifier,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    color: androidx.compose.ui.graphics.Color,
+    color: Color,
     onClick: () -> Unit
 ) {
     Column(
@@ -426,9 +479,9 @@ private fun NetworkSwitchDialog(
             Spacer(Modifier.height(10.dp))
             Text(
                 if (switchingToReal)
-                    "ستتعامل المحفظة الآن مع أموال USDT حقيقية على شبكة Tron الفعلية. تأكد أنك مستعد قبل المتابعة."
+                    "ستتعامل المحفظة الآن مع أموال USDT حقيقية. تأكد أنك مستعد قبل المتابعة."
                 else
-                    "ستتحول المحفظة لشبكة Nile التجريبية، حيث الأموال وهمية بالكامل ولا قيمة فعلية لها.",
+                    "ستتحول المحفظة لشبكة تجريبية، حيث الأموال وهمية ولا قيمة فعلية لها.",
                 fontSize = 13.sp,
                 color = CryptoGray,
                 textAlign = TextAlign.Center
@@ -445,7 +498,6 @@ private fun NetworkSwitchDialog(
                     border = BorderStroke(1.dp, CryptoGray),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = CryptoGray)
                 ) { Text("إلغاء") }
-
                 Button(
                     onClick = onConfirm,
                     modifier = Modifier.weight(1f).height(46.dp),
