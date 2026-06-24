@@ -39,16 +39,16 @@ fun WalletApp(viewModel: WalletViewModel) {
     val uiState by viewModel.uiState.collectAsState()
 
     when (uiState.currentScreen) {
-        is Screen.Splash -> {
-            CreateWalletScreen(viewModel)
-        }
-        is Screen.Lock -> LockScreen(viewModel)
+        is Screen.Splash      -> CreateWalletScreen(viewModel)
+        is Screen.Lock        -> LockScreen(viewModel)
         is Screen.CreateWallet -> CreateWalletScreen(viewModel)
         is Screen.ImportWallet -> ImportWalletScreen(viewModel)
         is Screen.BackupPhrase -> BackupPhraseScreen(viewModel)
-        is Screen.Home -> HomeScreen(viewModel)
-        is Screen.Send -> SendScreen(viewModel)
-        is Screen.Receive -> ReceiveScreen(viewModel)
-        is Screen.History -> HistoryScreen(viewModel)
+        is Screen.Home        -> HomeScreen(viewModel)
+        is Screen.Send        -> SendScreen(viewModel)
+        is Screen.Receive     -> ReceiveScreen(viewModel)
+        is Screen.History     -> HistoryScreen(viewModel)
+        is Screen.AddressBook -> AddressBookScreen(viewModel)
+        is Screen.Settings    -> SettingsScreen(viewModel)
     }
 }
