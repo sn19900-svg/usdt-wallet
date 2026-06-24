@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
+import com.nabil.usdtwallet.ui.ActiveChain
 import com.nabil.usdtwallet.ui.Screen
 import com.nabil.usdtwallet.ui.WalletViewModel
 import com.nabil.usdtwallet.ui.theme.*
@@ -31,8 +32,17 @@ fun ReceiveScreen(viewModel: WalletViewModel) {
     val clipboard = LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
 
-    val qrBitmap = remember(uiState.address) {
-        generateQrCode(uiState.address, 400)
+    val isBsc = uiState.activeChain == ActiveChain.BSC
+    val currentAddress = if (isBsc) uiState.bscAddress else uiState.address
+    val chainName = if (isBsc) "BSC BEP-20" else "Tron TRC-20"
+    val chainColor = if (isBsc) CryptoYellow else CryptoRed
+    val warningText = if (isBsc)
+        "⚠️ أرسل BEP-20 فقط لهذا العنوان. إرسال شبكة أخرى يؤدي لفقدان الأموال."
+    else
+        "⚠️ أرسل TRC-20 فقط لهذا العنوان. إرسال شبكة أخرى يؤدي لفقدان الأموال."
+
+    val qrBitmap = remember(currentAddress) {
+        generateQrCode(currentAddress, 400)
     }
 
     Column(
@@ -45,7 +55,6 @@ fun ReceiveScreen(viewModel: WalletViewModel) {
     ) {
         Spacer(Modifier.height(16.dp))
 
-        // Back
         Row(modifier = Modifier.fillMaxWidth()) {
             TextButton(onClick = { viewModel.navigate(Screen.Home) }) {
                 Icon(Icons.Default.ArrowBack, contentDescription = null, tint = CryptoGray)
@@ -58,7 +67,18 @@ fun ReceiveScreen(viewModel: WalletViewModel) {
 
         Text("استقبال USDT", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = CryptoWhite)
         Spacer(Modifier.height(4.dp))
-        Text("شبكة Tron TRC-20 فقط", fontSize = 14.sp, color = CryptoGray)
+
+        // اسم الشبكة الحالية
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(chainColor)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(chainName, fontSize = 14.sp, color = chainColor)
+        }
 
         Spacer(Modifier.height(28.dp))
 
@@ -92,9 +112,16 @@ fun ReceiveScreen(viewModel: WalletViewModel) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text("عنوان المحفظة", color = CryptoGray, fontSize = 12.sp)
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = if (isBsc) "شبكة BSC (BEP-20)" else "شبكة Tron (TRC-20)",
+                color = chainColor,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = uiState.address,
+                text = currentAddress,
                 color = CryptoWhite,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center
@@ -106,19 +133,19 @@ fun ReceiveScreen(viewModel: WalletViewModel) {
         // نسخ
         Button(
             onClick = {
-                clipboard.setText(AnnotatedString(uiState.address))
+                clipboard.setText(AnnotatedString(currentAddress))
                 copied = true
             },
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (copied) CryptoGreen.copy(alpha = 0.2f) else CryptoGreen
+                containerColor = if (copied) chainColor.copy(alpha = 0.2f) else chainColor
             )
         ) {
             Icon(
                 imageVector = if (copied) Icons.Default.Check else Icons.Default.ContentCopy,
                 contentDescription = null,
-                tint = if (copied) CryptoGreen else CryptoDark,
+                tint = if (copied) chainColor else CryptoDark,
                 modifier = Modifier.size(18.dp)
             )
             Spacer(Modifier.width(8.dp))
@@ -126,7 +153,7 @@ fun ReceiveScreen(viewModel: WalletViewModel) {
                 text = if (copied) "تم النسخ!" else "نسخ العنوان",
                 fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = if (copied) CryptoGreen else CryptoDark
+                color = if (copied) chainColor else CryptoDark
             )
         }
 
@@ -139,7 +166,6 @@ fun ReceiveScreen(viewModel: WalletViewModel) {
 
         Spacer(Modifier.height(20.dp))
 
-        // تحذير
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -149,7 +175,7 @@ fun ReceiveScreen(viewModel: WalletViewModel) {
                 .padding(14.dp)
         ) {
             Text(
-                text = "⚠️ أرسل TRC-20 فقط لهذا العنوان. إرسال شبكة أخرى يؤدي لفقدان الأموال.",
+                text = warningText,
                 color = CryptoYellow,
                 fontSize = 13.sp,
                 textAlign = TextAlign.Center
@@ -159,6 +185,7 @@ fun ReceiveScreen(viewModel: WalletViewModel) {
 }
 
 private fun generateQrCode(content: String, size: Int): Bitmap? {
+    if (content.isEmpty()) return null
     return try {
         val hints = mapOf(EncodeHintType.MARGIN to 1)
         val writer = QRCodeWriter()
