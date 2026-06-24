@@ -80,7 +80,7 @@ object BscApiClient {
     const val USDT_CONTRACT_BEP20_TESTNET = "0x337610d27c682E347C9cD60BD4b3b107C9d34dDd"
 
     private const val MAINNET_URL = "https://bsc-dataseed1.binance.org/"
-    private const val TESTNET_URL = "https://data-seed-prebsc-1-s1.binance.org:8545/"
+    private const val TESTNET_URL = "https://bsc-testnet.public.blastapi.io/"
 
     // Chain ID للتوقيع EIP-155
     const val MAINNET_CHAIN_ID = 56L
