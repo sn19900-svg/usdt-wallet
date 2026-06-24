@@ -21,7 +21,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.platform.LocalContext
 import androidx.fragment.app.FragmentActivity
 import com.nabil.usdtwallet.domain.auth.BiometricAuthManager
-import com.nabil.usdtwallet.domain.wallet.WalletManager
+import com.nabil.usdtwallet.ui.ActiveChain
 import com.nabil.usdtwallet.ui.Screen
 import com.nabil.usdtwallet.ui.WalletViewModel
 import com.nabil.usdtwallet.ui.theme.*
@@ -35,61 +35,69 @@ fun SendScreen(viewModel: WalletViewModel) {
     var amount by remember { mutableStateOf("") }
     var showConfirm by remember { mutableStateOf(false) }
     var biometricError by remember { mutableStateOf<String?>(null) }
-    var selectedCurrency by remember { mutableStateOf("USDT") } // "USDT" أو "TRX"
 
-    val isAddressValid = toAddress.length == 34 && toAddress.startsWith("T")
+    // العملة حسب السلسلة: USDT أو TRX/BNB
+    val isBsc = uiState.activeChain == ActiveChain.BSC
+    val nativeCurrency = if (isBsc) "BNB" else "TRX"
+    val chainName = if (isBsc) "BSC BEP-20" else "Tron TRC-20"
+    val chainColor = if (isBsc) CryptoYellow else CryptoRed
+
+    var selectedCurrency by remember(isBsc) {
+        mutableStateOf("USDT")
+    }
+
+    // التحقق من العنوان حسب السلسلة
+    val isAddressValid = if (isBsc) {
+        toAddress.startsWith("0x") && toAddress.length == 42
+    } else {
+        toAddress.startsWith("T") && toAddress.length == 34
+    }
+
+    val availableBalance = when {
+        selectedCurrency == "USDT" && isBsc  -> uiState.bscUsdtBalance
+        selectedCurrency == "USDT"            -> uiState.usdtBalance
+        isBsc                                 -> uiState.bnbBalance
+        else                                  -> uiState.trxBalance
+    }
+
     val amountDouble = amount.toDoubleOrNull() ?: 0.0
-    val availableBalance = if (selectedCurrency == "USDT") uiState.usdtBalance else uiState.trxBalance
     val isAmountValid = amountDouble > 0 && amountDouble <= availableBalance
     val canSend = isAddressValid && isAmountValid && !uiState.isLoading
 
     fun confirmWithBiometric() {
         val doSend = {
-            if (selectedCurrency == "USDT") viewModel.sendUsdt(toAddress, amountDouble)
-            else viewModel.sendTrx(toAddress, amountDouble)
+            when {
+                selectedCurrency == "USDT" -> viewModel.sendUsdt(toAddress, amountDouble)
+                isBsc                      -> viewModel.sendBnb(toAddress, amountDouble)
+                else                       -> viewModel.sendTrx(toAddress, amountDouble)
+            }
         }
-        if (activity == null) {
-            doSend()
-            return
-        }
-        if (!BiometricAuthManager.canAuthenticate(activity)) {
-            doSend()
-            return
-        }
+        if (activity == null) { doSend(); return }
+        if (!BiometricAuthManager.canAuthenticate(activity)) { doSend(); return }
         BiometricAuthManager.authenticate(
             activity = activity,
             title = "تأكيد الإرسال",
-            subtitle = "أكّد هويتك لإتمام عملية إرسال ${String.format("%.2f", amountDouble)} $selectedCurrency",
-            onSuccess = {
-                biometricError = null
-                doSend()
-            },
+            subtitle = "أكّد هويتك لإتمام إرسال ${String.format("%.2f", amountDouble)} $selectedCurrency",
+            onSuccess = { biometricError = null; doSend() },
             onError = { msg -> biometricError = "فشلت المصادقة: $msg" },
-            onCancel = { /* المستخدم ألغى، لا شيء يحدث */ }
+            onCancel = {}
         )
     }
 
-    // نجاح الإرسال
     if (uiState.sendSuccess) {
         SendSuccessDialog(
             txId = uiState.sendTxId,
-            onDismiss = {
-                viewModel.clearSendSuccess()
-                viewModel.navigate(Screen.Home)
-            }
+            onDismiss = { viewModel.clearSendSuccess(); viewModel.navigate(Screen.Home) }
         )
     }
 
-    // تأكيد الإرسال
     if (showConfirm) {
         ConfirmSendDialog(
             toAddress = toAddress,
             amount = amountDouble,
             currency = selectedCurrency,
-            onConfirm = {
-                showConfirm = false
-                confirmWithBiometric()
-            },
+            chainName = chainName,
+            onConfirm = { showConfirm = false; confirmWithBiometric() },
             onDismiss = { showConfirm = false }
         )
     }
@@ -115,11 +123,22 @@ fun SendScreen(viewModel: WalletViewModel) {
 
         Text("إرسال", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = CryptoWhite)
         Spacer(Modifier.height(4.dp))
-        Text("شبكة Tron", fontSize = 14.sp, color = CryptoGray)
+
+        // اسم الشبكة الحالية
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(chainColor)
+            )
+            Spacer(Modifier.width(6.dp))
+            Text(chainName, fontSize = 14.sp, color = chainColor)
+        }
 
         Spacer(Modifier.height(20.dp))
 
-        // اختيار العملة
+        // اختيار العملة (USDT أو TRX/BNB)
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -128,13 +147,13 @@ fun SendScreen(viewModel: WalletViewModel) {
                 .padding(4.dp),
             horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            listOf("USDT", "TRX").forEach { currency ->
+            listOf("USDT", nativeCurrency).forEach { currency ->
                 val isSelected = selectedCurrency == currency
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (isSelected) CryptoGreen else Color.Transparent)
+                        .background(if (isSelected) chainColor else Color.Transparent)
                         .clickable { selectedCurrency = currency; amount = "" }
                         .padding(vertical = 12.dp),
                     contentAlignment = Alignment.Center
@@ -156,15 +175,15 @@ fun SendScreen(viewModel: WalletViewModel) {
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(12.dp))
-                .background(CryptoGreen.copy(alpha = 0.1f))
+                .background(chainColor.copy(alpha = 0.1f))
                 .padding(14.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("الرصيد المتاح", color = CryptoGray, fontSize = 14.sp)
             Text(
-                "${String.format("%.2f", availableBalance)} $selectedCurrency",
-                color = CryptoGreen,
+                "${String.format("%.4f", availableBalance)} $selectedCurrency",
+                color = chainColor,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -173,13 +192,19 @@ fun SendScreen(viewModel: WalletViewModel) {
         Spacer(Modifier.height(20.dp))
 
         // عنوان المستقبل
+        val addressHint = if (isBsc) "0x..." else "Txxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        val addressError = if (isBsc)
+            "عنوان BSC غير صحيح (يبدأ بـ 0x ويحتوي 42 حرف)"
+        else
+            "عنوان Tron غير صحيح (يبدأ بـ T ويحتوي 34 حرف)"
+
         Text("عنوان المستقبل", color = CryptoGray, fontSize = 13.sp)
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = toAddress,
             onValueChange = { toAddress = it.trim() },
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text("Txxxxxxxxxxxxxxxxxxxxxxxxxxxxx", color = CryptoGray, fontSize = 13.sp) },
+            placeholder = { Text(addressHint, color = CryptoGray, fontSize = 13.sp) },
             trailingIcon = {
                 if (toAddress.isNotEmpty()) {
                     Icon(
@@ -196,7 +221,7 @@ fun SendScreen(viewModel: WalletViewModel) {
 
         if (toAddress.isNotEmpty() && !isAddressValid) {
             Spacer(Modifier.height(4.dp))
-            Text("عنوان Tron غير صحيح (يبدأ بـ T ويحتوي 34 حرف)", color = CryptoRed, fontSize = 12.sp)
+            Text(addressError, color = CryptoRed, fontSize = 12.sp)
         }
 
         Spacer(Modifier.height(16.dp))
@@ -210,8 +235,8 @@ fun SendScreen(viewModel: WalletViewModel) {
             modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("0.00", color = CryptoGray) },
             trailingIcon = {
-                TextButton(onClick = { amount = String.format("%.2f", availableBalance) }) {
-                    Text("الكل", color = CryptoGreen, fontSize = 13.sp)
+                TextButton(onClick = { amount = String.format("%.6f", availableBalance) }) {
+                    Text("الكل", color = chainColor, fontSize = 13.sp)
                 }
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -234,13 +259,12 @@ fun SendScreen(viewModel: WalletViewModel) {
         ) {
             Text("رسوم الشبكة", color = CryptoGray, fontSize = 13.sp)
             Text(
-                if (selectedCurrency == "USDT") "~1 USDT (من TRX)" else "~0.1 TRX",
+                if (isBsc) "~0.001 BNB" else if (selectedCurrency == "USDT") "~1 TRX" else "~0.1 TRX",
                 color = CryptoGray,
                 fontSize = 13.sp
             )
         }
 
-        // خطأ البصمة
         biometricError?.let {
             Spacer(Modifier.height(12.dp))
             Box(
@@ -249,12 +273,9 @@ fun SendScreen(viewModel: WalletViewModel) {
                     .clip(RoundedCornerShape(10.dp))
                     .background(CryptoRed.copy(alpha = 0.15f))
                     .padding(12.dp)
-            ) {
-                Text(it, color = CryptoRed, fontSize = 13.sp)
-            }
+            ) { Text(it, color = CryptoRed, fontSize = 13.sp) }
         }
 
-        // خطأ
         uiState.errorMessage?.let {
             Spacer(Modifier.height(12.dp))
             Box(
@@ -263,9 +284,7 @@ fun SendScreen(viewModel: WalletViewModel) {
                     .clip(RoundedCornerShape(10.dp))
                     .background(CryptoRed.copy(alpha = 0.15f))
                     .padding(12.dp)
-            ) {
-                Text(it, color = CryptoRed, fontSize = 13.sp)
-            }
+            ) { Text(it, color = CryptoRed, fontSize = 13.sp) }
         }
 
         Spacer(Modifier.height(24.dp))
@@ -275,7 +294,7 @@ fun SendScreen(viewModel: WalletViewModel) {
             modifier = Modifier.fillMaxWidth().height(52.dp),
             shape = RoundedCornerShape(14.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (canSend) CryptoGreen else CryptoDarkSurface,
+                containerColor = if (canSend) chainColor else CryptoDarkSurface,
                 contentColor = if (canSend) CryptoDark else CryptoGray
             ),
             enabled = canSend
@@ -291,7 +310,6 @@ fun SendScreen(viewModel: WalletViewModel) {
 
         Spacer(Modifier.height(20.dp))
 
-        // تحذير
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -315,6 +333,7 @@ private fun ConfirmSendDialog(
     toAddress: String,
     amount: Double,
     currency: String,
+    chainName: String,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -328,19 +347,13 @@ private fun ConfirmSendDialog(
         ) {
             Text("تأكيد الإرسال", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = CryptoWhite)
             Spacer(Modifier.height(20.dp))
-
-            ConfirmRow("المبلغ", "${String.format("%.2f", amount)} $currency")
+            ConfirmRow("المبلغ", "${String.format("%.6f", amount)} $currency")
             Spacer(Modifier.height(10.dp))
             ConfirmRow("إلى", "${toAddress.take(10)}...${toAddress.takeLast(6)}")
             Spacer(Modifier.height(10.dp))
-            ConfirmRow("الشبكة", if (currency == "USDT") "Tron TRC-20" else "Tron")
-
+            ConfirmRow("الشبكة", chainName)
             Spacer(Modifier.height(24.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f).height(46.dp),
@@ -348,7 +361,6 @@ private fun ConfirmSendDialog(
                     border = BorderStroke(1.dp, CryptoGray),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = CryptoGray)
                 ) { Text("إلغاء") }
-
                 Button(
                     onClick = onConfirm,
                     modifier = Modifier.weight(1f).height(46.dp),
@@ -376,12 +388,7 @@ private fun SendSuccessDialog(txId: String, onDismiss: () -> Unit) {
             Spacer(Modifier.height(12.dp))
             if (txId.isNotEmpty()) {
                 Text("TX ID:", color = CryptoGray, fontSize = 12.sp)
-                Text(
-                    "${txId.take(16)}...",
-                    color = CryptoWhite,
-                    fontSize = 13.sp,
-                    textAlign = TextAlign.Center
-                )
+                Text("${txId.take(16)}...", color = CryptoWhite, fontSize = 13.sp, textAlign = TextAlign.Center)
             }
             Spacer(Modifier.height(20.dp))
             Button(
