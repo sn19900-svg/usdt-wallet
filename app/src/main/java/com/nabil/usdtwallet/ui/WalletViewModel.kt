@@ -5,13 +5,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nabil.usdtwallet.BuildConfig
 import com.nabil.usdtwallet.data.repository.*
-import com.nabil.usdtwallet.domain.usecase.TronTransactionSigner
 import com.nabil.usdtwallet.domain.usecase.BscTransactionSigner
+import com.nabil.usdtwallet.domain.usecase.TronTransactionSigner
+import com.nabil.usdtwallet.domain.usecase.WalletNotificationWorker
 import com.nabil.usdtwallet.domain.wallet.WalletManager
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-
-// ─── UI States ─────────────────────────────────────────────
 
 sealed class Screen {
     object Splash : Screen()
@@ -23,23 +22,25 @@ sealed class Screen {
     object Send : Screen()
     object Receive : Screen()
     object History : Screen()
+    object AddressBook : Screen()
+    object Settings : Screen()
 }
 
 enum class ActiveChain { TRON, BSC }
 
 data class WalletUiState(
-    // ─── Tron ───────────────────────────────────────────────
     val address: String = "",
     val usdtBalance: Double = 0.0,
     val trxBalance: Double = 0.0,
-    // ─── BSC ────────────────────────────────────────────────
     val bscAddress: String = "",
     val bscUsdtBalance: Double = 0.0,
     val bnbBalance: Double = 0.0,
-    // ─── الشبكة النشطة ──────────────────────────────────────
     val activeChain: ActiveChain = ActiveChain.TRON,
-    // ─── مشتركة ─────────────────────────────────────────────
+    val bnbUsdPrice: Double = 0.0,
+    val trxUsdPrice: Double = 0.0,
+    val usdSypRate: Double = 13000.0,
     val transactions: List<Transaction> = emptyList(),
+    val savedAddresses: List<SavedAddress> = emptyList(),
     val isLoading: Boolean = false,
     val errorMessage: String? = null,
     val currentScreen: Screen = Screen.Splash,
@@ -50,50 +51,41 @@ data class WalletUiState(
     val updateVersion: String = "",
     val updateDownloadUrl: String = "",
     val isUnlocked: Boolean = false,
-    val isTestnet: Boolean = true
+    val isTestnet: Boolean = true,
+    val notificationsEnabled: Boolean = false
 )
 
 class WalletViewModel(application: Application) : AndroidViewModel(application) {
 
     private val secureStorage = SecureStorage(application)
     private val repository = WalletRepository()
+    private val app = application
 
     private val _uiState = MutableStateFlow(WalletUiState(isTestnet = NetworkConfig.isTestnet))
     val uiState: StateFlow<WalletUiState> = _uiState.asStateFlow()
-
-    // ─── تبديل الشبكة (testnet/mainnet) ───────────────────
-
-    fun toggleNetwork() {
-        val newValue = !NetworkConfig.isTestnet
-        NetworkConfig.setTestnet(newValue)
-        _uiState.update { it.copy(isTestnet = newValue) }
-        refreshBalance()
-    }
-
-    // ─── تبديل السلسلة النشطة (Tron/BSC) ─────────────────
-
-    fun switchChain(chain: ActiveChain) {
-        _uiState.update { it.copy(activeChain = chain, errorMessage = null) }
-        refreshBalance()
-    }
 
     init {
         checkWalletExists()
         checkForUpdate()
     }
 
-    // ─── التحقق من وجود تحديث ─────────────────────────────
+    fun toggleNetwork() {
+        NetworkConfig.setTestnet(!NetworkConfig.isTestnet)
+        _uiState.update { it.copy(isTestnet = NetworkConfig.isTestnet) }
+        refreshBalance()
+    }
+
+    fun switchChain(chain: ActiveChain) {
+        _uiState.update { it.copy(activeChain = chain, errorMessage = null) }
+        refreshBalance()
+    }
 
     private fun checkForUpdate() {
         viewModelScope.launch {
             val info = UpdateChecker.checkForUpdate(BuildConfig.BUILD_NUMBER)
             if (info.isUpdateAvailable) {
                 _uiState.update {
-                    it.copy(
-                        updateAvailable = true,
-                        updateVersion = info.latestVersion,
-                        updateDownloadUrl = info.downloadUrl
-                    )
+                    it.copy(updateAvailable = true, updateVersion = info.latestVersion, updateDownloadUrl = info.downloadUrl)
                 }
             }
         }
@@ -103,15 +95,8 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         if (secureStorage.isWalletCreated()) {
             val address = secureStorage.getAddress() ?: ""
             val privateKey = secureStorage.getPrivateKey() ?: ""
-            val bscAddress = if (privateKey.isNotEmpty())
-                BscTransactionSigner.getAddressFromPrivateKey(privateKey) else ""
-            _uiState.update {
-                it.copy(
-                    address = address,
-                    bscAddress = bscAddress,
-                    currentScreen = Screen.Lock
-                )
-            }
+            val bscAddress = if (privateKey.isNotEmpty()) BscTransactionSigner.getAddressFromPrivateKey(privateKey) else ""
+            _uiState.update { it.copy(address = address, bscAddress = bscAddress, currentScreen = Screen.Lock) }
         } else {
             _uiState.update { it.copy(currentScreen = Screen.CreateWallet) }
         }
@@ -120,9 +105,9 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     fun onUnlocked() {
         _uiState.update { it.copy(isUnlocked = true, currentScreen = Screen.Home) }
         refreshBalance()
+        fetchPrices()
+        loadAddressBook()
     }
-
-    // ─── إنشاء محفظة جديدة ────────────────────────────────
 
     fun createNewWallet() {
         viewModelScope.launch {
@@ -130,25 +115,15 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             try {
                 val keys = WalletManager.generateNewWallet()
                 val bscAddress = BscTransactionSigner.getAddressFromPrivateKey(keys.privateKeyHex)
-                _uiState.update {
-                    it.copy(
-                        mnemonic = keys.mnemonic,
-                        address = keys.address,
-                        bscAddress = bscAddress,
-                        isLoading = false,
-                        currentScreen = Screen.BackupPhrase
-                    )
-                }
                 secureStorage.saveWallet(keys.mnemonic, keys.privateKeyHex, keys.address)
-            } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isLoading = false, errorMessage = "خطأ في إنشاء المحفظة")
+                    it.copy(mnemonic = keys.mnemonic, address = keys.address, bscAddress = bscAddress, isLoading = false, currentScreen = Screen.BackupPhrase)
                 }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, errorMessage = "خطأ في إنشاء المحفظة") }
             }
         }
     }
-
-    // ─── استيراد محفظة ────────────────────────────────────
 
     fun importWallet(words: List<String>) {
         viewModelScope.launch {
@@ -157,32 +132,18 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             if (keys != null) {
                 val bscAddress = BscTransactionSigner.getAddressFromPrivateKey(keys.privateKeyHex)
                 secureStorage.saveWallet(keys.mnemonic, keys.privateKeyHex, keys.address)
-                _uiState.update {
-                    it.copy(
-                        address = keys.address,
-                        bscAddress = bscAddress,
-                        isLoading = false,
-                        currentScreen = Screen.Home
-                    )
-                }
-                refreshBalance()
+                _uiState.update { it.copy(address = keys.address, bscAddress = bscAddress, isLoading = false, currentScreen = Screen.Home) }
+                refreshBalance(); fetchPrices()
             } else {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = "الكلمات غير صحيحة، تحقق منها وأعد المحاولة"
-                    )
-                }
+                _uiState.update { it.copy(isLoading = false, errorMessage = "الكلمات غير صحيحة، تحقق منها وأعد المحاولة") }
             }
         }
     }
 
     fun confirmBackupDone() {
         _uiState.update { it.copy(currentScreen = Screen.Home) }
-        refreshBalance()
+        refreshBalance(); fetchPrices()
     }
-
-    // ─── تحديث الرصيد (حسب السلسلة النشطة) ───────────────
 
     fun refreshBalance() {
         when (_uiState.value.activeChain) {
@@ -192,29 +153,18 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun refreshTronBalance() {
-        val address = _uiState.value.address
-        if (address.isEmpty()) return
+        val address = _uiState.value.address; if (address.isEmpty()) return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            when (val result = repository.getBalance(address)) {
-                is Result.Success -> _uiState.update {
-                    it.copy(
-                        usdtBalance = result.data.usdt,
-                        trxBalance = result.data.trx,
-                        isLoading = false,
-                        errorMessage = null
-                    )
-                }
-                is Result.Error -> _uiState.update {
-                    it.copy(isLoading = false, errorMessage = result.message)
-                }
+            when (val r = repository.getBalance(address)) {
+                is Result.Success -> _uiState.update { it.copy(usdtBalance = r.data.usdt, trxBalance = r.data.trx, isLoading = false, errorMessage = null) }
+                is Result.Error   -> _uiState.update { it.copy(isLoading = false, errorMessage = r.message) }
             }
         }
     }
 
     private fun refreshBscBalance() {
-        val bscAddress = _uiState.value.bscAddress
-        if (bscAddress.isEmpty()) return
+        val bscAddress = _uiState.value.bscAddress; if (bscAddress.isEmpty()) return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             val usdtResult = BscTransactionSigner.getUsdtBalance(bscAddress)
@@ -222,7 +172,7 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             _uiState.update {
                 it.copy(
                     bscUsdtBalance = (usdtResult as? Result.Success)?.data ?: it.bscUsdtBalance,
-                    bnbBalance      = (bnbResult  as? Result.Success)?.data ?: it.bnbBalance,
+                    bnbBalance     = (bnbResult  as? Result.Success)?.data ?: it.bnbBalance,
                     isLoading = false,
                     errorMessage = (usdtResult as? Result.Error)?.message
                 )
@@ -230,128 +180,104 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    // ─── جلب المعاملات ────────────────────────────────────
+    fun fetchPrices() {
+        viewModelScope.launch {
+            try {
+                val prices = PriceRepository.getPrices()
+                _uiState.update { it.copy(bnbUsdPrice = prices.bnbUsd, trxUsdPrice = prices.trxUsd, usdSypRate = prices.usdSyp) }
+            } catch (_: Exception) {}
+        }
+    }
 
     fun loadTransactions() {
-        val address = _uiState.value.address
-        if (address.isEmpty()) return
+        val address = _uiState.value.address; if (address.isEmpty()) return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            when (val result = repository.getTransactions(address)) {
-                is Result.Success -> _uiState.update {
-                    it.copy(transactions = result.data, isLoading = false)
-                }
-                is Result.Error -> _uiState.update {
-                    it.copy(isLoading = false, errorMessage = result.message)
-                }
+            when (val r = repository.getTransactions(address)) {
+                is Result.Success -> _uiState.update { it.copy(transactions = r.data, isLoading = false) }
+                is Result.Error   -> _uiState.update { it.copy(isLoading = false, errorMessage = r.message) }
             }
         }
     }
 
-    // ─── التنقل ───────────────────────────────────────────
+    fun loadAddressBook() {
+        _uiState.update { it.copy(savedAddresses = AddressBookManager.getAll(app)) }
+    }
+
+    fun saveAddress(name: String, address: String) {
+        val chain = if (_uiState.value.activeChain == ActiveChain.BSC) "BSC" else "TRON"
+        AddressBookManager.save(app, SavedAddress(name = name, address = address, chain = chain))
+        loadAddressBook()
+    }
+
+    fun deleteAddress(id: String) {
+        AddressBookManager.delete(app, id)
+        loadAddressBook()
+    }
+
+    fun toggleNotifications(enabled: Boolean) {
+        if (enabled) WalletNotificationWorker.schedule(app) else WalletNotificationWorker.cancel(app)
+        _uiState.update { it.copy(notificationsEnabled = enabled) }
+    }
 
     fun navigate(screen: Screen) {
         _uiState.update { it.copy(currentScreen = screen, errorMessage = null) }
-        if (screen == Screen.History) loadTransactions()
+        when (screen) {
+            is Screen.History     -> loadTransactions()
+            is Screen.AddressBook -> loadAddressBook()
+            is Screen.Home        -> fetchPrices()
+            else -> {}
+        }
     }
 
-    fun clearError() {
-        _uiState.update { it.copy(errorMessage = null) }
-    }
-
-    fun clearSendSuccess() {
-        _uiState.update { it.copy(sendSuccess = false, sendTxId = "") }
-    }
-
-    // ─── إرسال USDT (حسب السلسلة النشطة) ─────────────────
+    fun clearError() { _uiState.update { it.copy(errorMessage = null) } }
+    fun clearSendSuccess() { _uiState.update { it.copy(sendSuccess = false, sendTxId = "") } }
 
     fun sendUsdt(toAddress: String, amount: Double) {
-        val privateKey = secureStorage.getPrivateKey() ?: run {
-            _uiState.update { it.copy(errorMessage = "لم يتم العثور على المفتاح الخاص") }
-            return
-        }
+        val pk = secureStorage.getPrivateKey() ?: run { _uiState.update { it.copy(errorMessage = "لم يتم العثور على المفتاح الخاص") }; return }
         when (_uiState.value.activeChain) {
-            ActiveChain.TRON -> sendTronUsdt(toAddress, amount, privateKey)
-            ActiveChain.BSC  -> sendBscUsdt(toAddress, amount, privateKey)
-        }
-    }
-
-    private fun sendTronUsdt(toAddress: String, amount: Double, privateKey: String) {
-        val fromAddress = _uiState.value.address
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            when (val result = TronTransactionSigner.sendUsdt(fromAddress, toAddress, amount, privateKey)) {
-                is Result.Success -> {
-                    _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = result.data) }
-                    refreshBalance()
-                }
-                is Result.Error -> _uiState.update {
-                    it.copy(isLoading = false, errorMessage = result.message)
+            ActiveChain.TRON -> viewModelScope.launch {
+                _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+                when (val r = TronTransactionSigner.sendUsdt(_uiState.value.address, toAddress, amount, pk)) {
+                    is Result.Success -> { _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = r.data) }; refreshBalance() }
+                    is Result.Error   -> _uiState.update { it.copy(isLoading = false, errorMessage = r.message) }
                 }
             }
-        }
-    }
-
-    private fun sendBscUsdt(toAddress: String, amount: Double, privateKey: String) {
-        val fromAddress = _uiState.value.bscAddress
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            when (val result = BscTransactionSigner.sendUsdt(fromAddress, toAddress, amount, privateKey)) {
-                is Result.Success -> {
-                    _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = result.data) }
-                    refreshBalance()
-                }
-                is Result.Error -> _uiState.update {
-                    it.copy(isLoading = false, errorMessage = result.message)
+            ActiveChain.BSC -> viewModelScope.launch {
+                _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+                when (val r = BscTransactionSigner.sendUsdt(_uiState.value.bscAddress, toAddress, amount, pk)) {
+                    is Result.Success -> { _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = r.data) }; refreshBalance() }
+                    is Result.Error   -> _uiState.update { it.copy(isLoading = false, errorMessage = r.message) }
                 }
             }
         }
     }
 
     fun sendTrx(toAddress: String, amount: Double) {
-        val privateKey = secureStorage.getPrivateKey() ?: run {
-            _uiState.update { it.copy(errorMessage = "لم يتم العثور على المفتاح الخاص") }
-            return
-        }
-        val fromAddress = _uiState.value.address
+        val pk = secureStorage.getPrivateKey() ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            when (val result = TronTransactionSigner.sendTrx(fromAddress, toAddress, amount, privateKey)) {
-                is Result.Success -> {
-                    _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = result.data) }
-                    refreshBalance()
-                }
-                is Result.Error -> _uiState.update {
-                    it.copy(isLoading = false, errorMessage = result.message)
-                }
+            when (val r = TronTransactionSigner.sendTrx(_uiState.value.address, toAddress, amount, pk)) {
+                is Result.Success -> { _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = r.data) }; refreshBalance() }
+                is Result.Error   -> _uiState.update { it.copy(isLoading = false, errorMessage = r.message) }
             }
         }
     }
 
     fun sendBnb(toAddress: String, amount: Double) {
-        val privateKey = secureStorage.getPrivateKey() ?: run {
-            _uiState.update { it.copy(errorMessage = "لم يتم العثور على المفتاح الخاص") }
-            return
-        }
-        val fromAddress = _uiState.value.bscAddress
+        val pk = secureStorage.getPrivateKey() ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            when (val result = BscTransactionSigner.sendBnb(fromAddress, toAddress, amount, privateKey)) {
-                is Result.Success -> {
-                    _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = result.data) }
-                    refreshBalance()
-                }
-                is Result.Error -> _uiState.update {
-                    it.copy(isLoading = false, errorMessage = result.message)
-                }
+            when (val r = BscTransactionSigner.sendBnb(_uiState.value.bscAddress, toAddress, amount, pk)) {
+                is Result.Success -> { _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = r.data) }; refreshBalance() }
+                is Result.Error   -> _uiState.update { it.copy(isLoading = false, errorMessage = r.message) }
             }
         }
     }
 
-    // ─── حذف المحفظة ──────────────────────────────────────
-
     fun deleteWallet() {
         secureStorage.deleteWallet()
+        WalletNotificationWorker.cancel(app)
         _uiState.update { WalletUiState(currentScreen = Screen.CreateWallet) }
     }
 
