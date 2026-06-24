@@ -36,20 +36,21 @@ fun HomeScreen(viewModel: WalletViewModel) {
     var addressCopied by remember { mutableStateOf(false) }
     var showNetworkSwitchConfirm by remember { mutableStateOf(false) }
 
-    // العنوان الحالي حسب السلسلة النشطة
-    val currentAddress = if (uiState.activeChain == ActiveChain.TRON)
-        uiState.address else uiState.bscAddress
-
-    // ألوان السلسلة النشطة
+    val currentAddress = if (uiState.activeChain == ActiveChain.TRON) uiState.address else uiState.bscAddress
     val chainColor = if (uiState.activeChain == ActiveChain.TRON) CryptoRed else CryptoYellow
+    val usdtBalance = if (uiState.activeChain == ActiveChain.TRON) uiState.usdtBalance else uiState.bscUsdtBalance
+    val nativeBalance = if (uiState.activeChain == ActiveChain.TRON) uiState.trxBalance else uiState.bnbBalance
+    val nativeSymbol = if (uiState.activeChain == ActiveChain.TRON) "TRX" else "BNB"
+    val nativeUsdPrice = if (uiState.activeChain == ActiveChain.TRON) uiState.trxUsdPrice else uiState.bnbUsdPrice
+
+    // قيمة الرصيد بالدولار والليرة
+    val totalUsd = usdtBalance + (nativeBalance * nativeUsdPrice)
+    val totalSyp = totalUsd * uiState.usdSypRate
 
     if (showNetworkSwitchConfirm) {
         NetworkSwitchDialog(
             switchingToReal = uiState.isTestnet,
-            onConfirm = {
-                showNetworkSwitchConfirm = false
-                viewModel.toggleNetwork()
-            },
+            onConfirm = { showNetworkSwitchConfirm = false; viewModel.toggleNetwork() },
             onDismiss = { showNetworkSwitchConfirm = false }
         )
     }
@@ -60,157 +61,122 @@ fun HomeScreen(viewModel: WalletViewModel) {
             .background(CryptoDark)
             .verticalScroll(rememberScrollState())
     ) {
-        // ─── Network Toggle Banner ────────────────────────────
+        // ─── Top Bar ──────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(if (uiState.isTestnet) CryptoYellow.copy(alpha = 0.15f) else CryptoRed.copy(alpha = 0.15f))
-                .padding(horizontal = 20.dp, vertical = 10.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                if (uiState.isTestnet) "🧪 وضع التجربة (أموال وهمية)" else "⚠️ وضع حقيقي (أموال فعلية)",
-                color = if (uiState.isTestnet) CryptoYellow else CryptoRed,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold
-            )
             TextButton(onClick = { showNetworkSwitchConfirm = true }) {
                 Text(
-                    if (uiState.isTestnet) "التبديل لحقيقي" else "التبديل لتجريبي",
+                    if (uiState.isTestnet) "🧪 وهمي" else "⚠️ حقيقي",
                     color = if (uiState.isTestnet) CryptoYellow else CryptoRed,
-                    fontSize = 12.sp
+                    fontSize = 12.sp, fontWeight = FontWeight.SemiBold
                 )
+            }
+            // زر الإعدادات
+            IconButton(onClick = { viewModel.navigate(Screen.Settings) }) {
+                Icon(Icons.Default.Settings, contentDescription = "الإعدادات", tint = CryptoGray, modifier = Modifier.size(20.dp))
             }
         }
 
-        // ─── Chain Selector (Tron / BSC) ──────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(CryptoDarkCard),
-            horizontalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            ChainTab(
-                label = "🔴 Tron TRC-20",
-                selected = uiState.activeChain == ActiveChain.TRON,
-                color = CryptoRed,
-                modifier = Modifier.weight(1f),
-                onClick = { viewModel.switchChain(ActiveChain.TRON) }
-            )
-            ChainTab(
-                label = "🟡 BSC BEP-20",
-                selected = uiState.activeChain == ActiveChain.BSC,
-                color = CryptoYellow,
-                modifier = Modifier.weight(1f),
-                onClick = { viewModel.switchChain(ActiveChain.BSC) }
-            )
-        }
-
-        // ─── Update Banner ────────────────────────────────────
+        // ─── تحديث متاح ──────────────────────────────────────
         if (uiState.updateAvailable) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(CryptoGreen)
                     .clickable {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uiState.updateDownloadUrl))
-                        context.startActivity(intent)
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(uiState.updateDownloadUrl)))
                     }
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
+                    .padding(horizontal = 20.dp, vertical = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        "تحديث جديد متاح (${uiState.updateVersion})",
-                        color = CryptoDark,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text("اضغط هنا للتحميل", color = CryptoDark.copy(alpha = 0.8f), fontSize = 11.sp)
-                }
-                Icon(Icons.Default.Download, contentDescription = "تحديث", tint = CryptoDark, modifier = Modifier.size(20.dp))
+                Text("تحديث جديد (${uiState.updateVersion}) - اضغط للتحميل", color = CryptoDark, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Icon(Icons.Default.Download, contentDescription = null, tint = CryptoDark, modifier = Modifier.size(18.dp))
             }
         }
 
-        // ─── Header Card ──────────────────────────────────────
+        // ─── Chain Selector ───────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(CryptoDarkCard)
+        ) {
+            ChainTab("🔴 Tron TRC-20", uiState.activeChain == ActiveChain.TRON, CryptoRed, Modifier.weight(1f)) {
+                viewModel.switchChain(ActiveChain.TRON)
+            }
+            ChainTab("🟡 BSC BEP-20", uiState.activeChain == ActiveChain.BSC, CryptoYellow, Modifier.weight(1f)) {
+                viewModel.switchChain(ActiveChain.BSC)
+            }
+        }
+
+        // ─── Balance Card ─────────────────────────────────────
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(
-                    Brush.verticalGradient(listOf(chainColor.copy(alpha = 0.2f), CryptoDark))
-                )
-                .padding(horizontal = 24.dp, vertical = 32.dp)
+                .background(Brush.verticalGradient(listOf(chainColor.copy(alpha = 0.2f), CryptoDark)))
+                .padding(horizontal = 24.dp, vertical = 28.dp)
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
 
-                Text("رصيد USDT", color = CryptoGray, fontSize = 14.sp)
-                Spacer(Modifier.height(8.dp))
+                Text("رصيد USDT", color = CryptoGray, fontSize = 13.sp)
+                Spacer(Modifier.height(6.dp))
 
                 if (uiState.isLoading) {
                     CircularProgressIndicator(color = chainColor, modifier = Modifier.size(32.dp))
                 } else {
-                    val usdtBalance = if (uiState.activeChain == ActiveChain.TRON)
-                        uiState.usdtBalance else uiState.bscUsdtBalance
-
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            text = String.format("%.2f", usdtBalance),
-                            fontSize = 46.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = CryptoWhite
+                            String.format("%.2f", usdtBalance),
+                            fontSize = 44.sp, fontWeight = FontWeight.Bold, color = CryptoWhite
                         )
                         Spacer(Modifier.width(6.dp))
-                        Text(
-                            text = "USDT",
-                            fontSize = 18.sp,
-                            color = chainColor,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
+                        Text("USDT", fontSize = 18.sp, color = chainColor, modifier = Modifier.padding(bottom = 6.dp))
                     }
                 }
 
                 Spacer(Modifier.height(4.dp))
+                Text("$nativeSymbol: ${String.format("%.4f", nativeBalance)}", color = CryptoGray, fontSize = 13.sp)
 
-                // رصيد العملة الأصلية (TRX أو BNB)
-                val nativeLabel = if (uiState.activeChain == ActiveChain.TRON)
-                    "TRX: ${String.format("%.2f", uiState.trxBalance)}"
-                else
-                    "BNB: ${String.format("%.4f", uiState.bnbBalance)}"
-                Text(text = nativeLabel, color = CryptoGray, fontSize = 13.sp)
-
-                uiState.errorMessage?.let { error ->
-                    Spacer(Modifier.height(8.dp))
-                    Text("⚠️ $error", color = CryptoRed, fontSize = 12.sp, textAlign = TextAlign.Center)
+                // القيمة بالدولار والليرة السورية
+                if (totalUsd > 0) {
+                    Spacer(Modifier.height(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text("≈ ${String.format("%.2f", totalUsd)} $", color = CryptoGreen, fontSize = 12.sp)
+                        Text("≈ ${String.format("%,.0f", totalSyp)} ل.س", color = CryptoGray, fontSize = 12.sp)
+                    }
                 }
 
-                Spacer(Modifier.height(16.dp))
+                uiState.errorMessage?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text("⚠️ $it", color = CryptoRed, fontSize = 12.sp, textAlign = TextAlign.Center)
+                }
 
-                // عنوان المحفظة
+                Spacer(Modifier.height(14.dp))
+
+                // العنوان
                 Row(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
                         .background(CryptoDarkCard)
-                        .clickable {
-                            clipboard.setText(AnnotatedString(currentAddress))
-                            addressCopied = true
-                        }
+                        .clickable { clipboard.setText(AnnotatedString(currentAddress)); addressCopied = true }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = if (currentAddress.length > 16)
-                            "${currentAddress.take(8)}...${currentAddress.takeLast(6)}"
-                        else currentAddress,
-                        color = CryptoGray,
-                        fontSize = 13.sp
+                        if (currentAddress.length > 16) "${currentAddress.take(8)}...${currentAddress.takeLast(6)}" else currentAddress,
+                        color = CryptoGray, fontSize = 13.sp
                     )
                     Icon(
-                        imageVector = if (addressCopied) Icons.Default.Check else Icons.Default.ContentCopy,
+                        if (addressCopied) Icons.Default.Check else Icons.Default.ContentCopy,
                         contentDescription = null,
                         tint = if (addressCopied) CryptoGreen else CryptoGray,
                         modifier = Modifier.size(16.dp)
@@ -218,51 +184,27 @@ fun HomeScreen(viewModel: WalletViewModel) {
                 }
 
                 LaunchedEffect(addressCopied) {
-                    if (addressCopied) {
-                        kotlinx.coroutines.delay(2000)
-                        addressCopied = false
-                    }
+                    if (addressCopied) { kotlinx.coroutines.delay(2000); addressCopied = false }
                 }
             }
         }
 
         // ─── Action Buttons ───────────────────────────────────
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            ActionButton(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Default.ArrowUpward,
-                label = "إرسال",
-                color = CryptoGreen,
-                onClick = { viewModel.navigate(Screen.Send) }
-            )
-            ActionButton(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Default.ArrowDownward,
-                label = "استقبال",
-                color = CryptoBlue,
-                onClick = { viewModel.navigate(Screen.Receive) }
-            )
-            ActionButton(
-                modifier = Modifier.weight(1f),
-                icon = Icons.Default.Refresh,
-                label = "تحديث",
-                color = CryptoGray,
-                onClick = { viewModel.refreshBalance() }
-            )
+            ActionButton(Modifier.weight(1f), Icons.Default.ArrowUpward, "إرسال", CryptoGreen) { viewModel.navigate(Screen.Send) }
+            ActionButton(Modifier.weight(1f), Icons.Default.ArrowDownward, "استقبال", CryptoBlue) { viewModel.navigate(Screen.Receive) }
+            ActionButton(Modifier.weight(1f), Icons.Default.Contacts, "عناوين", CryptoYellow) { viewModel.navigate(Screen.AddressBook) }
+            ActionButton(Modifier.weight(1f), Icons.Default.Refresh, "تحديث", CryptoGray) { viewModel.refreshBalance() }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
 
-        // ─── Recent Transactions Preview ──────────────────────
+        // ─── آخر المعاملات ────────────────────────────────────
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -272,44 +214,32 @@ fun HomeScreen(viewModel: WalletViewModel) {
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
 
         if (uiState.transactions.isEmpty()) {
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(CryptoDarkCard)
-                    .padding(32.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    .clip(RoundedCornerShape(14.dp)).background(CryptoDarkCard).padding(28.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("📭", fontSize = 32.sp)
-                    Spacer(Modifier.height(8.dp))
-                    Text("لا توجد معاملات بعد", color = CryptoGray, fontSize = 14.sp)
+                    Text("📭", fontSize = 28.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text("لا توجد معاملات بعد", color = CryptoGray, fontSize = 13.sp)
                 }
             }
         } else {
             uiState.transactions.take(3).forEach { tx ->
-                TransactionItem(
-                    tx = tx,
-                    myAddress = currentAddress,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
-                )
+                TransactionItem(tx = tx, myAddress = currentAddress, modifier = Modifier.padding(horizontal = 16.dp, vertical = 3.dp))
             }
         }
 
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(20.dp))
 
-        // ─── Network Info ─────────────────────────────────────
+        // ─── معلومات الشبكة ───────────────────────────────────
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(CryptoDarkCard)
-                .padding(14.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(12.dp)).background(CryptoDarkCard).padding(14.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             if (uiState.activeChain == ActiveChain.TRON) {
@@ -327,184 +257,99 @@ fun HomeScreen(viewModel: WalletViewModel) {
     }
 }
 
-// ─── Chain Tab ────────────────────────────────────────────
-
 @Composable
-private fun ChainTab(
-    label: String,
-    selected: Boolean,
-    color: Color,
-    modifier: Modifier,
-    onClick: () -> Unit
-) {
+private fun ChainTab(label: String, selected: Boolean, color: Color, modifier: Modifier, onClick: () -> Unit) {
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
+        modifier = modifier.clip(RoundedCornerShape(14.dp))
             .background(if (selected) color.copy(alpha = 0.2f) else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = 12.dp),
+            .clickable(onClick = onClick).padding(vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = label,
-            color = if (selected) color else CryptoGray,
-            fontSize = 13.sp,
-            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-        )
+        Text(label, color = if (selected) color else CryptoGray, fontSize = 13.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
     }
 }
 
-// ─── Action Button ────────────────────────────────────────
-
 @Composable
-private fun ActionButton(
-    modifier: Modifier,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    color: Color,
-    onClick: () -> Unit
-) {
+private fun ActionButton(modifier: Modifier, icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, color: Color, onClick: () -> Unit) {
     Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(14.dp))
-            .background(CryptoDarkCard)
-            .clickable(onClick = onClick)
-            .padding(vertical = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = modifier.clip(RoundedCornerShape(14.dp)).background(CryptoDarkCard).clickable(onClick = onClick).padding(vertical = 14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(44.dp)
-                .clip(CircleShape)
-                .background(color.copy(alpha = 0.15f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(imageVector = icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
+        Box(modifier = Modifier.size(38.dp).clip(CircleShape).background(color.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
         }
-        Text(text = label, color = CryptoWhite, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(label, color = CryptoWhite, fontSize = 11.sp, fontWeight = FontWeight.Medium)
     }
 }
 
 @Composable
 private fun NetworkStat(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = label, color = CryptoGray, fontSize = 11.sp)
-        Text(text = value, color = CryptoGreen, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Text(label, color = CryptoGray, fontSize = 11.sp)
+        Text(value, color = CryptoGreen, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 
 @Composable
-fun TransactionItem(
-    tx: com.nabil.usdtwallet.data.repository.Transaction,
-    myAddress: String,
-    modifier: Modifier = Modifier
-) {
-    val isIncoming = tx.isIncoming
+fun TransactionItem(tx: com.nabil.usdtwallet.data.repository.Transaction, myAddress: String, modifier: Modifier = Modifier) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(CryptoDarkCard)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(CryptoDarkCard).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(
-                    if (isIncoming) CryptoGreen.copy(alpha = 0.15f)
-                    else CryptoRed.copy(alpha = 0.15f)
-                ),
+            modifier = Modifier.size(40.dp).clip(CircleShape)
+                .background(if (tx.isIncoming) CryptoGreen.copy(alpha = 0.15f) else CryptoRed.copy(alpha = 0.15f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (isIncoming) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+                if (tx.isIncoming) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
                 contentDescription = null,
-                tint = if (isIncoming) CryptoGreen else CryptoRed,
+                tint = if (tx.isIncoming) CryptoGreen else CryptoRed,
                 modifier = Modifier.size(20.dp)
             )
         }
-
         Column(modifier = Modifier.weight(1f)) {
+            Text(if (tx.isIncoming) "استقبال" else "إرسال", color = CryptoWhite, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             Text(
-                text = if (isIncoming) "استقبال" else "إرسال",
-                color = CryptoWhite,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = if (isIncoming) "من: ${tx.from.take(8)}..." else "إلى: ${tx.to.take(8)}...",
-                color = CryptoGray,
-                fontSize = 12.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                if (tx.isIncoming) "من: ${tx.from.take(8)}..." else "إلى: ${tx.to.take(8)}...",
+                color = CryptoGray, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
         }
-
         Text(
-            text = "${if (isIncoming) "+" else "-"}${String.format("%.2f", tx.amount)} USDT",
-            color = if (isIncoming) CryptoGreen else CryptoRed,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold
+            "${if (tx.isIncoming) "+" else "-"}${String.format("%.2f", tx.amount)} USDT",
+            color = if (tx.isIncoming) CryptoGreen else CryptoRed,
+            fontSize = 14.sp, fontWeight = FontWeight.SemiBold
         )
     }
 }
 
 @Composable
-private fun NetworkSwitchDialog(
-    switchingToReal: Boolean,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
+private fun NetworkSwitchDialog(switchingToReal: Boolean, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Column(
-            modifier = Modifier
-                .clip(RoundedCornerShape(20.dp))
-                .background(CryptoDarkCard)
-                .padding(24.dp),
+            modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(CryptoDarkCard).padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(if (switchingToReal) "⚠️" else "🧪", fontSize = 40.sp)
             Spacer(Modifier.height(12.dp))
-            Text(
-                if (switchingToReal) "التبديل للأموال الحقيقية؟" else "التبديل للتجربة الوهمية؟",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = CryptoWhite,
-                textAlign = TextAlign.Center
-            )
+            Text(if (switchingToReal) "التبديل للأموال الحقيقية؟" else "التبديل للتجربة الوهمية؟", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = CryptoWhite, textAlign = TextAlign.Center)
             Spacer(Modifier.height(10.dp))
             Text(
-                if (switchingToReal)
-                    "ستتعامل المحفظة الآن مع أموال USDT حقيقية. تأكد أنك مستعد قبل المتابعة."
-                else
-                    "ستتحول المحفظة لشبكة تجريبية، حيث الأموال وهمية ولا قيمة فعلية لها.",
-                fontSize = 13.sp,
-                color = CryptoGray,
-                textAlign = TextAlign.Center
+                if (switchingToReal) "ستتعامل المحفظة مع أموال USDT حقيقية. تأكد أنك مستعد."
+                else "ستتحول لشبكة تجريبية، الأموال وهمية بالكامل.",
+                fontSize = 13.sp, color = CryptoGray, textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(20.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f).height(46.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, CryptoGray),
+                    onClick = onDismiss, modifier = Modifier.weight(1f).height(46.dp),
+                    shape = RoundedCornerShape(12.dp), border = BorderStroke(1.dp, CryptoGray),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = CryptoGray)
                 ) { Text("إلغاء") }
                 Button(
-                    onClick = onConfirm,
-                    modifier = Modifier.weight(1f).height(46.dp),
+                    onClick = onConfirm, modifier = Modifier.weight(1f).height(46.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (switchingToReal) CryptoRed else CryptoGreen
-                    )
+                    colors = ButtonDefaults.buttonColors(containerColor = if (switchingToReal) CryptoRed else CryptoGreen)
                 ) { Text("تأكيد", color = CryptoDark, fontWeight = FontWeight.Bold) }
             }
         }
