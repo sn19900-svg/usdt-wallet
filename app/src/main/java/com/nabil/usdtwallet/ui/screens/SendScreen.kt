@@ -85,6 +85,24 @@ fun SendScreen(viewModel: WalletViewModel) {
         )
     }
 
+    // ─── QR Scanner ──────────────────────────────────────
+    if (showQrScanner) {
+        QrScannerScreen(
+            onResult = { scanned ->
+                // دعم صيغ مختلفة: tron:ADDRESS أو ethereum:ADDRESS أو ADDRESS فقط
+                toAddress = scanned
+                    .removePrefix("tron:")
+                    .removePrefix("ethereum:")
+                    .removePrefix("binance:")
+                    .split("?")[0]
+                    .trim()
+                showQrScanner = false
+            },
+            onDismiss = { showQrScanner = false }
+        )
+        return
+    }
+
     if (uiState.sendSuccess) {
         SendSuccessDialog(
             txId = uiState.sendTxId,
