@@ -1,6 +1,7 @@
 package com.nabil.usdtwallet.ui.screens
 
 import androidx.compose.foundation.*
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -63,7 +64,11 @@ fun SendScreen(viewModel: WalletViewModel) {
 
     val amountDouble = amount.toDoubleOrNull() ?: 0.0
     val isAmountValid = amountDouble > 0 && amountDouble <= availableBalance
-    val canSend = isAddressValid && isAmountValid && !uiState.isLoading
+    // تحقق من رصيد الغاز
+    val minTrxGas = 2.0
+    val minBnbGas = 0.001
+    val hasEnoughGas = if (isBsc) uiState.bnbBalance >= minBnbGas else uiState.trxBalance >= minTrxGas
+    val canSend = isAddressValid && isAmountValid && !uiState.isLoading && hasEnoughGas
 
     fun confirmWithBiometric() {
         val doSend = {
@@ -209,6 +214,39 @@ fun SendScreen(viewModel: WalletViewModel) {
         }
 
         Spacer(Modifier.height(20.dp))
+
+        // بطاقة رصيد الغاز
+        val nativeBal = if (isBsc) uiState.bnbBalance else uiState.trxBalance
+        val nativeSym = if (isBsc) "BNB" else "TRX"
+        val minGas = if (isBsc) minBnbGas else minTrxGas
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(if (hasEnoughGas) CryptoGreen.copy(alpha = 0.08f) else CryptoRed.copy(alpha = 0.12f))
+                .border(1.dp, if (hasEnoughGas) CryptoGreen.copy(alpha = 0.3f) else CryptoRed.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                .padding(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(if (hasEnoughGas) "⛽" else "⚠️", fontSize = 20.sp)
+                Column {
+                    Text(
+                        "رسوم الشبكة ($nativeSym)",
+                        color = if (hasEnoughGas) CryptoGreen else CryptoRed,
+                        fontSize = 12.sp, fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        if (hasEnoughGas)
+                            "رصيدك: ${String.format("%.4f", nativeBal)} $nativeSym ✓"
+                        else
+                            "رصيدك: ${String.format("%.4f", nativeBal)} $nativeSym — تحتاج $minGas على الأقل",
+                        color = if (hasEnoughGas) CryptoGray else CryptoRed,
+                        fontSize = 12.sp
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
 
         // عنوان المستقبل
         val addressHint = if (isBsc) "0x..." else "Txxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
