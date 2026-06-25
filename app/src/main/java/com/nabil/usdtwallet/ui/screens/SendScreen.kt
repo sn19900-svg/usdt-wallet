@@ -35,6 +35,7 @@ fun SendScreen(viewModel: WalletViewModel) {
     var amount by remember { mutableStateOf("") }
     var showConfirm by remember { mutableStateOf(false) }
     var biometricError by remember { mutableStateOf<String?>(null) }
+    var showQrScanner by remember { mutableStateOf(false) }
 
     // العملة حسب السلسلة: USDT أو TRX/BNB
     val isBsc = uiState.activeChain == ActiveChain.BSC
@@ -198,8 +199,19 @@ fun SendScreen(viewModel: WalletViewModel) {
         else
             "عنوان Tron غير صحيح (يبدأ بـ T ويحتوي 34 حرف)"
 
-        Text("عنوان المستقبل", color = CryptoGray, fontSize = 13.sp)
-        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("عنوان المستقبل", color = CryptoGray, fontSize = 13.sp)
+            TextButton(onClick = { showQrScanner = true }) {
+                Icon(Icons.Default.QrCodeScanner, contentDescription = null, tint = chainColor, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("مسح QR", color = chainColor, fontSize = 12.sp)
+            }
+        }
+        Spacer(Modifier.height(4.dp))
         OutlinedTextField(
             value = toAddress,
             onValueChange = { toAddress = it.trim() },
