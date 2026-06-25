@@ -24,6 +24,7 @@ sealed class Screen {
     object History : Screen()
     object AddressBook : Screen()
     object Settings : Screen()
+    object Market : Screen()
 }
 
 enum class ActiveChain { TRON, BSC }
@@ -226,6 +227,7 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             is Screen.History     -> loadTransactions()
             is Screen.AddressBook -> loadAddressBook()
             is Screen.Home        -> fetchPrices()
+            is Screen.Market      -> {}
             else -> {}
         }
     }
