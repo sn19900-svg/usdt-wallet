@@ -5,12 +5,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.net.URL
+import javax.net.ssl.HttpsURLConnection
 
 data class CryptoPrices(
     val usdtUsd: Double = 1.0,
     val bnbUsd: Double = 0.0,
     val trxUsd: Double = 0.0,
-    val usdSyp: Double = 14000.0  // سيُحدَّث من sp-today.com
+    val usdSyp: Double = 14000.0
 )
 
 object PriceRepository {
@@ -28,89 +29,72 @@ object PriceRepository {
         var trxUsd = cachedPrices.trxUsd
         var usdSyp = cachedPrices.usdSyp
 
-        // ─── 1. جلب أسعار العملات الرقمية من CoinGecko ──────
+        // ─── 1. أسعار العملات الرقمية من CoinGecko ──────────
         try {
-            val url = "https://api.coingecko.com/api/v3/simple/price?ids=binancecoin,tron&vs_currencies=usd"
-            val response = URL(url).readText()
-            val json = JSONObject(response)
+            val json = JSONObject(
+                URL("https://api.coingecko.com/api/v3/simple/price?ids=binancecoin,tron&vs_currencies=usd")
+                    .readText()
+            )
             bnbUsd = json.optJSONObject("binancecoin")?.optDouble("usd", bnbUsd) ?: bnbUsd
             trxUsd = json.optJSONObject("tron")?.optDouble("usd", trxUsd) ?: trxUsd
-            Log.i(TAG, "✅ أسعار العملات: BNB=$bnbUsd, TRX=$trxUsd")
+            Log.i(TAG, "✅ CoinGecko: BNB=$bnbUsd, TRX=$trxUsd")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ فشل CoinGecko: ${e.message}")
+            Log.e(TAG, "❌ CoinGecko: ${e.message}")
         }
 
-        // ─── 2. جلب سعر الدولار مقابل الليرة من sp-today.com ─
+        // ─── 2. سعر الدولار من sp-today.com ─────────────────
+        // الصفحة تعرض: "USD...13,650 13,750" (شراء - بيع)
+        // نأخذ متوسط الشراء والبيع
         try {
-            val html = URL("https://sp-today.com/ar").readText()
+            val conn = URL("https://sp-today.com/en").openConnection() as HttpsURLConnection
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android)")
+            conn.setRequestProperty("Accept-Language", "en-US")
+            conn.connectTimeout = 10000
+            conn.readTimeout = 10000
+            val html = conn.inputStream.bufferedReader().readText()
+            conn.disconnect()
 
-            // البحث عن النمط: "14,000" أو "14000" في HTML
-            // sp-today يعرض السعر بصيغة "14,000" أو "١٤٬٠٠٠"
-            val patterns = listOf(
-                Regex(""""usd"[^}]*?"buy"\s*:\s*"?([\d,،٠-٩]+)"?"""),
-                Regex("""دولار[^>]*?>\s*([\d,،]+)\s*</"""),
-                Regex(""""buy_rate"\s*:\s*"?([\d,.]+)"?"""),
-                Regex(""""rate"\s*:\s*"?([\d,.]+)"?""")
-            )
+            // النمط الدقيق من الصفحة: "US Dollar 13,650 13,750"
+            val pattern = Regex("""US Dollar\s+([\d,]+)\s+([\d,]+)""")
+            val match = pattern.find(html)
 
-            for (pattern in patterns) {
-                val match = pattern.find(html)
-                if (match != null) {
-                    val rawNum = match.groupValues[1]
-                        .replace(",", "")
-                        .replace("،", "")
-                        .replace("٠", "0").replace("١", "1").replace("٢", "2")
-                        .replace("٣", "3").replace("٤", "4").replace("٥", "5")
-                        .replace("٦", "6").replace("٧", "7").replace("٨", "8")
-                        .replace("٩", "9")
-                    val parsed = rawNum.toDoubleOrNull()
-                    if (parsed != null && parsed > 1000) {
-                        usdSyp = parsed
-                        Log.i(TAG, "✅ سعر الدولار من sp-today: $usdSyp ل.س")
-                        break
-                    }
+            if (match != null) {
+                val buy  = match.groupValues[1].replace(",", "").toDoubleOrNull()
+                val sell = match.groupValues[2].replace(",", "").toDoubleOrNull()
+                if (buy != null && sell != null && buy > 1000) {
+                    usdSyp = (buy + sell) / 2.0
+                    Log.i(TAG, "✅ sp-today: شراء=$buy، بيع=$sell، متوسط=$usdSyp ل.س")
                 }
-            }
-
-            // إذا فشلت الـ patterns، نجرّب طريقة بديلة
-            if (usdSyp == cachedPrices.usdSyp) {
-                // البحث عن أي رقم بين 10000 و 20000 في الصفحة (نطاق معقول لسعر الدولار)
-                val numberPattern = Regex("""(\d{2}[,،]?\d{3})""")
-                val matches = numberPattern.findAll(html)
-                for (m in matches) {
-                    val num = m.groupValues[1].replace(",", "").replace("،", "").toDoubleOrNull()
-                    if (num != null && num in 10000.0..25000.0) {
-                        usdSyp = num
-                        Log.i(TAG, "✅ سعر الدولار (بديل): $usdSyp ل.س")
-                        break
-                    }
-                }
-            }
-
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ فشل sp-today: ${e.message}")
-            // احتياطي: نحاول lirat.org
-            try {
-                val html2 = URL("https://lirat.org/").readText()
-                val pattern = Regex("""دولار[^>]*>\s*(\d{4,6})""")
-                val match = pattern.find(html2)
-                val parsed = match?.groupValues?.get(1)?.toDoubleOrNull()
+            } else {
+                // نمط احتياطي: أول رقم بعد "USD"
+                val fallback = Regex("""USD[^>]*?(\d{2,3}[,،]\d{3})""").find(html)
+                val parsed = fallback?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull()
                 if (parsed != null && parsed > 1000) {
                     usdSyp = parsed
-                    Log.i(TAG, "✅ سعر الدولار من lirat.org: $usdSyp ل.س")
+                    Log.i(TAG, "✅ sp-today (fallback): $usdSyp ل.س")
+                }
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ sp-today: ${e.message}")
+            // ─── 3. موقع lirat.org كاحتياطي ─────────────────
+            try {
+                val html2 = URL("https://lirat.org/").readText()
+                // lirat.org يعرض: "دولار إدلب · 12420"
+                val p = Regex("""دولار[^\d]*([\d,]+)""").find(html2)
+                val v = p?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull()
+                if (v != null && v > 1000) {
+                    usdSyp = v
+                    Log.i(TAG, "✅ lirat.org: $usdSyp ل.س")
                 }
             } catch (e2: Exception) {
-                Log.e(TAG, "❌ فشل lirat.org: ${e2.message}")
+                Log.e(TAG, "❌ lirat.org: ${e2.message}")
             }
         }
 
-        cachedPrices = CryptoPrices(
-            usdtUsd = 1.0,
-            bnbUsd  = bnbUsd,
-            trxUsd  = trxUsd,
-            usdSyp  = usdSyp
-        )
+        cachedPrices = CryptoPrices(usdtUsd = 1.0, bnbUsd = bnbUsd, trxUsd = trxUsd, usdSyp = usdSyp)
         lastFetch = now
+        Log.i(TAG, "📊 الأسعار النهائية: BNB=$bnbUsd, TRX=$trxUsd, USD/SYP=$usdSyp")
         cachedPrices
     }
 }
