@@ -3,6 +3,7 @@ package com.nabil.usdtwallet.data.repository
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.URL
 import javax.net.ssl.HttpsURLConnection
@@ -19,7 +20,7 @@ object PriceRepository {
     private const val TAG = "PriceRepository"
     private var cachedPrices: CryptoPrices = CryptoPrices()
     private var lastFetch: Long = 0
-    private const val CACHE_DURATION = 300_000L // 5 دقائق
+    private const val CACHE_DURATION = 120_000L // دقيقتان
 
     suspend fun getPrices(): CryptoPrices = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
@@ -29,72 +30,113 @@ object PriceRepository {
         var trxUsd = cachedPrices.trxUsd
         var usdSyp = cachedPrices.usdSyp
 
-        // ─── 1. أسعار العملات الرقمية من CoinGecko ──────────
+        // ─── 1. أسعار العملات من Binance ─────────────────────
         try {
-            val json = JSONObject(
-                URL("https://api.coingecko.com/api/v3/simple/price?ids=binancecoin,tron&vs_currencies=usd")
-                    .readText()
+            val symbols = "%5B%22BNBUSDT%22,%22TRXUSDT%22%5D" // ["BNBUSDT","TRXUSDT"]
+            val json = JSONArray(
+                URL("https://api.binance.com/api/v3/ticker/price?symbols=$symbols").readText()
             )
-            bnbUsd = json.optJSONObject("binancecoin")?.optDouble("usd", bnbUsd) ?: bnbUsd
-            trxUsd = json.optJSONObject("tron")?.optDouble("usd", trxUsd) ?: trxUsd
-            Log.i(TAG, "✅ CoinGecko: BNB=$bnbUsd, TRX=$trxUsd")
+            for (i in 0 until json.length()) {
+                val obj = json.getJSONObject(i)
+                val symbol = obj.getString("symbol")
+                val price = obj.getString("price").toDoubleOrNull() ?: 0.0
+                when (symbol) {
+                    "BNBUSDT" -> bnbUsd = price
+                    "TRXUSDT" -> trxUsd = price
+                }
+            }
+            Log.i(TAG, "✅ Binance: BNB=$bnbUsd, TRX=$trxUsd")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ CoinGecko: ${e.message}")
+            Log.e(TAG, "❌ Binance prices: ${e.message}")
         }
 
-        // ─── 2. سعر الدولار من sp-today.com ─────────────────
-        // الصفحة تعرض: "USD...13,650 13,750" (شراء - بيع)
-        // نأخذ متوسط الشراء والبيع
+        // ─── 2. سعر USD/SYP من sp-today.com ──────────────────
+        // المنطق: نجرب عدة أنماط لاستخراج السعر بدقة
         try {
             val conn = URL("https://sp-today.com/en").openConnection() as HttpsURLConnection
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Android)")
-            conn.setRequestProperty("Accept-Language", "en-US")
-            conn.connectTimeout = 10000
-            conn.readTimeout = 10000
+            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 13)")
+            conn.setRequestProperty("Accept", "text/html")
+            conn.connectTimeout = 12000
+            conn.readTimeout = 12000
             val html = conn.inputStream.bufferedReader().readText()
             conn.disconnect()
 
-            // النمط الدقيق من الصفحة: "US Dollar 13,650 13,750"
-            val pattern = Regex("""US Dollar\s+([\d,]+)\s+([\d,]+)""")
-            val match = pattern.find(html)
+            var found = false
 
-            if (match != null) {
-                val buy  = match.groupValues[1].replace(",", "").toDoubleOrNull()
-                val sell = match.groupValues[2].replace(",", "").toDoubleOrNull()
-                if (buy != null && sell != null && buy > 1000) {
-                    usdSyp = (buy + sell) / 2.0
-                    Log.i(TAG, "✅ sp-today: شراء=$buy، بيع=$sell، متوسط=$usdSyp ل.س")
-                }
-            } else {
-                // نمط احتياطي: أول رقم بعد "USD"
-                val fallback = Regex("""USD[^>]*?(\d{2,3}[,،]\d{3})""").find(html)
-                val parsed = fallback?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull()
-                if (parsed != null && parsed > 1000) {
-                    usdSyp = parsed
-                    Log.i(TAG, "✅ sp-today (fallback): $usdSyp ل.س")
+            // النمط 1: data-buy="13650" أو data-sell="13750"
+            val dataBuy = Regex("""data-buy=["\']?([\d]+)["\']?""").find(html)
+            if (dataBuy != null) {
+                val buy = dataBuy.groupValues[1].toDoubleOrNull()
+                val dataSell = Regex("""data-sell=["\']?([\d]+)["\']?""").find(html)
+                val sell = dataSell?.groupValues?.get(1)?.toDoubleOrNull()
+                if (buy != null && buy > 5000) {
+                    usdSyp = if (sell != null && sell > 5000) (buy + sell) / 2.0 else buy
+                    Log.i(TAG, "✅ sp-today نمط1: $usdSyp ل.س")
+                    found = true
                 }
             }
+
+            // النمط 2: "US Dollar" متبوعاً برقمين (شراء - بيع)
+            if (!found) {
+                val p2 = Regex("""US Dollar\D+([\d,]+)\D+([\d,]+)""").find(html)
+                if (p2 != null) {
+                    val buy = p2.groupValues[1].replace(",", "").toDoubleOrNull()
+                    val sell = p2.groupValues[2].replace(",", "").toDoubleOrNull()
+                    if (buy != null && buy > 5000) {
+                        usdSyp = if (sell != null) (buy + sell) / 2.0 else buy
+                        Log.i(TAG, "✅ sp-today نمط2: $usdSyp ل.س")
+                        found = true
+                    }
+                }
+            }
+
+            // النمط 3: أي رقم من 5 خانات بين 10000 و 25000
+            if (!found) {
+                val p3 = Regex("""(\d{5})""").findAll(html)
+                for (m in p3) {
+                    val v = m.groupValues[1].toDoubleOrNull() ?: continue
+                    if (v in 10000.0..25000.0) {
+                        usdSyp = v
+                        Log.i(TAG, "✅ sp-today نمط3: $usdSyp ل.س")
+                        found = true
+                        break
+                    }
+                }
+            }
+
+            if (!found) Log.w(TAG, "⚠️ sp-today: لم يُعثر على سعر")
 
         } catch (e: Exception) {
             Log.e(TAG, "❌ sp-today: ${e.message}")
-            // ─── 3. موقع lirat.org كاحتياطي ─────────────────
+
+            // ─── 3. احتياطي: جلب من exchangerate-api ─────────
+            // ملاحظة: SYP الرسمي ≠ السوق السوداء
+            // نستخدمه كآخر خيار مع تعديل معامل السوق الموازي
             try {
-                val html2 = URL("https://lirat.org/").readText()
-                // lirat.org يعرض: "دولار إدلب · 12420"
-                val p = Regex("""دولار[^\d]*([\d,]+)""").find(html2)
-                val v = p?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull()
-                if (v != null && v > 1000) {
-                    usdSyp = v
-                    Log.i(TAG, "✅ lirat.org: $usdSyp ل.س")
+                val json = JSONObject(
+                    URL("https://open.er-api.com/v6/latest/USD").readText()
+                )
+                val rates = json.optJSONObject("rates")
+                val officialRate = rates?.optDouble("SYP", 0.0) ?: 0.0
+                // السعر الرسمي السوري ~12,500 لكن السوق الموازي أعلى
+                // نضرب × 1.1 كتقريب معقول
+                if (officialRate > 1000) {
+                    usdSyp = officialRate * 1.1
+                    Log.i(TAG, "✅ er-api (تقريبي): $usdSyp ل.س")
                 }
             } catch (e2: Exception) {
-                Log.e(TAG, "❌ lirat.org: ${e2.message}")
+                Log.e(TAG, "❌ er-api: ${e2.message}")
             }
         }
 
-        cachedPrices = CryptoPrices(usdtUsd = 1.0, bnbUsd = bnbUsd, trxUsd = trxUsd, usdSyp = usdSyp)
+        cachedPrices = CryptoPrices(
+            usdtUsd = 1.0,
+            bnbUsd = bnbUsd,
+            trxUsd = trxUsd,
+            usdSyp = usdSyp
+        )
         lastFetch = now
-        Log.i(TAG, "📊 الأسعار النهائية: BNB=$bnbUsd, TRX=$trxUsd, USD/SYP=$usdSyp")
+        Log.i(TAG, "📊 النهائي: BNB=$bnbUsd TRX=$trxUsd USD/SYP=$usdSyp")
         cachedPrices
     }
 }
