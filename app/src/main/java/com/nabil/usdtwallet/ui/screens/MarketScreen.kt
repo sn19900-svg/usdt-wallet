@@ -25,6 +25,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nabil.usdtwallet.ui.Screen
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
 import com.nabil.usdtwallet.ui.WalletViewModel
 import com.nabil.usdtwallet.ui.theme.*
 import kotlinx.coroutines.Dispatchers
@@ -96,6 +98,7 @@ private suspend fun fetchCoinPrice(symbol: String): CoinPrice? = withContext(Dis
 fun MarketScreen(viewModel: WalletViewModel) {
     val focusManager = LocalFocusManager.current
     val searchFocus = remember { FocusRequester() }
+    val coroutineScope = rememberCoroutineScope()
 
     var searchQuery by remember { mutableStateOf("") }
     var searchResult by remember { mutableStateOf<CoinPrice?>(null) }
@@ -197,7 +200,7 @@ fun MarketScreen(viewModel: WalletViewModel) {
                     imeAction = ImeAction.Search
                 ),
                 keyboardActions = KeyboardActions(onSearch = {
-                    kotlinx.coroutines.GlobalScope.launch { doSearch() }
+                    coroutineScope.launch { doSearch() }
                 }),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = CryptoGreen,
