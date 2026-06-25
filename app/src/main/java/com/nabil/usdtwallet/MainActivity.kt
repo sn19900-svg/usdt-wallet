@@ -50,5 +50,6 @@ fun WalletApp(viewModel: WalletViewModel) {
         is Screen.History     -> HistoryScreen(viewModel)
         is Screen.AddressBook -> AddressBookScreen(viewModel)
         is Screen.Settings    -> SettingsScreen(viewModel)
+        is Screen.Market      -> MarketScreen(viewModel)
     }
 }
