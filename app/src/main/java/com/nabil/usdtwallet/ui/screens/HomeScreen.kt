@@ -198,6 +198,7 @@ fun HomeScreen(viewModel: WalletViewModel) {
             ActionButton(Modifier.weight(1f), Icons.Default.ArrowDownward, "استقبال", CryptoBlue) { viewModel.navigate(Screen.Receive) }
             ActionButton(Modifier.weight(1f), Icons.Default.Contacts, "عناوين", CryptoYellow) { viewModel.navigate(Screen.AddressBook) }
             ActionButton(Modifier.weight(1f), Icons.Default.Refresh, "تحديث", CryptoGray) { viewModel.refreshBalance() }
+            ActionButton(Modifier.weight(1f), Icons.Default.TrendingUp, "السوق", CryptoGreen) { viewModel.navigate(Screen.Market) }
         }
 
         Spacer(Modifier.height(20.dp))
