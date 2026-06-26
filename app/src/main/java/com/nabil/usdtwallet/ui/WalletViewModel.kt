@@ -39,7 +39,6 @@ data class WalletUiState(
     val activeChain: ActiveChain = ActiveChain.TRON,
     val bnbUsdPrice: Double = 0.0,
     val trxUsdPrice: Double = 0.0,
-    val usdSypRate: Double = 13000.0,
     val transactions: List<Transaction> = emptyList(),
     val savedAddresses: List<SavedAddress> = emptyList(),
     val isLoading: Boolean = false,
@@ -185,7 +184,7 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             try {
                 val prices = PriceRepository.getPrices()
-                _uiState.update { it.copy(bnbUsdPrice = prices.bnbUsd, trxUsdPrice = prices.trxUsd, usdSypRate = prices.usdSyp) }
+                _uiState.update { it.copy(bnbUsdPrice = prices.bnbUsd, trxUsdPrice = prices.trxUsd) }
             } catch (_: Exception) {}
         }
     }
