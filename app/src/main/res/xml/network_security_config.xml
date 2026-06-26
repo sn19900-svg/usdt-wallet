@@ -1,6 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- السماح بالاتصال الآمن بجميع المواقع -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Tron API -->
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">api.trongrid.io</domain>
+        <domain includeSubdomains="true">nile.trongrid.io</domain>
+    </domain-config>
+
+    <!-- Binance API -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.binance.com</domain>
+        <domain includeSubdomains="true">bsc-dataseed1.binance.org</domain>
+        <domain includeSubdomains="true">data-seed-prebsc-1-s1.binance.org</domain>
+    </domain-config>
+
+    <!-- TradingView -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">tradingview.com</domain>
+        <domain includeSubdomains="true">s3.tradingview.com</domain>
+        <domain includeSubdomains="true">charting_library.tradingview.com</domain>
+        <domain includeSubdomains="true">prodata.tradingview.com</domain>
+        <domain includeSubdomains="true">pushstream.tradingview.com</domain>
+        <domain includeSubdomains="true">static.tradingview.com</domain>
+    </domain-config>
+
+    <!-- CoinGecko و sp-today -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">api.coingecko.com</domain>
+        <domain includeSubdomains="true">sp-today.com</domain>
+        <domain includeSubdomains="true">open.er-api.com</domain>
     </domain-config>
 </network-security-config>
