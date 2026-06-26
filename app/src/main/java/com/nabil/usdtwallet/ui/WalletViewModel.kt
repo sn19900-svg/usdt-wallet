@@ -107,6 +107,7 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         refreshBalance()
         fetchPrices()
         loadAddressBook()
+        loadTransactions()
     }
 
     fun createNewWallet() {
@@ -225,7 +226,7 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         when (screen) {
             is Screen.History     -> loadTransactions()
             is Screen.AddressBook -> loadAddressBook()
-            is Screen.Home        -> fetchPrices()
+            is Screen.Home        -> { fetchPrices(); loadTransactions() }
             is Screen.Market      -> {}
             else -> {}
         }
