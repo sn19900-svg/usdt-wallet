@@ -94,8 +94,7 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     private fun checkWalletExists() {
         if (secureStorage.isWalletCreated()) {
             val address = secureStorage.getAddress() ?: ""
-            val privateKey = secureStorage.getPrivateKey() ?: ""
-            val bscAddress = if (privateKey.isNotEmpty()) BscTransactionSigner.getAddressFromPrivateKey(privateKey) else ""
+            val bscAddress = secureStorage.getBscAddress() ?: ""
             _uiState.update { it.copy(address = address, bscAddress = bscAddress, currentScreen = Screen.Lock) }
         } else {
             _uiState.update { it.copy(currentScreen = Screen.CreateWallet) }
@@ -115,8 +114,9 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             _uiState.update { it.copy(isLoading = true) }
             try {
                 val keys = WalletManager.generateNewWallet()
-                val bscAddress = BscTransactionSigner.getAddressFromPrivateKey(keys.privateKeyHex)
-                secureStorage.saveWallet(keys.mnemonic, keys.privateKeyHex, keys.address)
+                val bscPrivKey = WalletManager.deriveBscPrivateKey(keys.mnemonic)
+                val bscAddress = WalletManager.deriveBscAddress(keys.mnemonic)
+                secureStorage.saveWallet(keys.mnemonic, keys.privateKeyHex, keys.address, bscPrivKey, bscAddress)
                 _uiState.update {
                     it.copy(mnemonic = keys.mnemonic, address = keys.address, bscAddress = bscAddress, isLoading = false, currentScreen = Screen.BackupPhrase)
                 }
@@ -131,8 +131,9 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             val keys = WalletManager.importFromMnemonic(words)
             if (keys != null) {
-                val bscAddress = BscTransactionSigner.getAddressFromPrivateKey(keys.privateKeyHex)
-                secureStorage.saveWallet(keys.mnemonic, keys.privateKeyHex, keys.address)
+                val bscPrivKey = WalletManager.deriveBscPrivateKey(keys.mnemonic)
+                val bscAddress = WalletManager.deriveBscAddress(keys.mnemonic)
+                secureStorage.saveWallet(keys.mnemonic, keys.privateKeyHex, keys.address, bscPrivKey, bscAddress)
                 _uiState.update { it.copy(address = keys.address, bscAddress = bscAddress, isLoading = false, currentScreen = Screen.Home) }
                 refreshBalance(); fetchPrices()
             } else {
@@ -267,7 +268,7 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun sendBnb(toAddress: String, amount: Double) {
-        val pk = secureStorage.getPrivateKey() ?: return
+        val pk = secureStorage.getBscPrivateKey() ?: secureStorage.getPrivateKey() ?: return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             when (val r = BscTransactionSigner.sendBnb(_uiState.value.bscAddress, toAddress, amount, pk)) {
