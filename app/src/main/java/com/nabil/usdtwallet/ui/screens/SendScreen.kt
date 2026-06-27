@@ -90,8 +90,8 @@ fun SendScreen(viewModel: WalletViewModel) {
         else -> ""
     }
 
-    val minTrxGas = 2.0
-    val minBnbGas = 0.001
+    val minTrxGas = 1.0
+    val minBnbGas = 0.0002
     val hasEnoughGas = if (isBsc) uiState.bnbBalance >= minBnbGas else uiState.trxBalance >= minTrxGas
     val isAmountValid = amountInCrypto > 0 && amountInCrypto <= availableBalance
     val canSend = isAddressValid && isAmountValid && !uiState.isLoading && hasEnoughGas
