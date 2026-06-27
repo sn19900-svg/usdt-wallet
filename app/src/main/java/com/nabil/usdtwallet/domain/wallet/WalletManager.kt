@@ -16,6 +16,8 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
+import java.security.KeyPairGenerator
+import java.security.spec.NamedParameterSpec
 
 /**
  * WalletManager - BIP39 + BIP44 صحيح متوافق مع Trust Wallet
@@ -279,6 +281,59 @@ object WalletManager {
         }
         for (byte in input) { if (byte == 0.toByte()) sb.append(BASE58_ALPHABET[0]) else break }
         return sb.reverse().toString()
+    }
+
+
+    // ─── Solana BIP44: m/44'/501'/0'/0' ───────────────────
+    // Solana تستخدم Ed25519 مع hardened path كامل
+
+    fun deriveSolanaAddress(mnemonicWords: List<String>): String {
+        val privKey = deriveSolanaPrivateKey(mnemonicWords)
+        return solanaPrivKeyToAddress(privKey)
+    }
+
+    fun deriveSolanaPrivateKey(mnemonicWords: List<String>): ByteArray {
+        val seed = mnemonicToSeed(mnemonicWords)
+        // m/44'/501'/0'/0' - كل مستويات hardened لـ Ed25519
+        val path = listOf(
+            0x80000000L + 44,
+            0x80000000L + 501,
+            0x80000000L + 0,
+            0x80000000L + 0
+        )
+        return deriveSolanaChildFromPath(seed, path)
+    }
+
+    private fun deriveSolanaChildFromPath(seed: ByteArray, path: List<Long>): ByteArray {
+        // Ed25519 seed derivation per SLIP-0010
+        var I = hmacSha512("ed25519 seed".toByteArray(Charsets.UTF_8), seed)
+        for (index in path) {
+            val kL = I.copyOfRange(0, 32)
+            val kR = I.copyOfRange(32, 64)
+            val data = byteArrayOf(0x00) + kL + indexToBytes(index)
+            I = hmacSha512(kR, data)
+        }
+        return I.copyOfRange(0, 32) // 32 bytes private key
+    }
+
+    private fun solanaPrivKeyToAddress(privKeyBytes: ByteArray): String {
+        // Ed25519 public key من private key باستخدام BouncyCastle
+        return try {
+            val params = org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(privKeyBytes, 0)
+            val pubKey = params.generatePublicKey()
+            encodeBase58(pubKey.encoded)
+        } catch (e: Exception) {
+            Log.e(TAG, "خطأ في Solana address: ${e.message}")
+            ""
+        }
+    }
+
+    fun deriveSolanaPrivateKeyBase58(mnemonicWords: List<String>): String {
+        val privBytes = deriveSolanaPrivateKey(mnemonicWords)
+        // Solana keypair = private key (32) + public key (32) = 64 bytes
+        val params = org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters(privBytes, 0)
+        val pubBytes = params.generatePublicKey().encoded
+        return encodeBase58(privBytes + pubBytes)
     }
 
     fun isValidTronAddress(address: String) = address.startsWith("T") && address.length == 34
