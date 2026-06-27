@@ -340,7 +340,7 @@ fun SendScreen(viewModel: WalletViewModel) {
 // ─── شاشة اختيار الشبكة ──────────────────────────────────
 
 @Composable
-fun ChainSelectScreen(title: String, onSelectTron: () -> Unit, onSelectBsc: () -> Unit, onBack: () -> Unit) {
+fun ChainSelectScreen(title: String, onSelectTron: () -> Unit, onSelectBsc: () -> Unit, onSelectSolana: () -> Unit = {}, onBack: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().background(CryptoDark).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -394,6 +394,26 @@ fun ChainSelectScreen(title: String, onSelectTron: () -> Unit, onSelectBsc: () -
                     Text("الرصيد: ${String.format("%.2f", 0.0)} USDT", color = CryptoGray, fontSize = 12.sp)
                 }
                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = CryptoYellow)
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Solana
+        Box(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                .background(Color(0xFF9945FF).copy(0.12f)).border(1.5.dp, Color(0xFF9945FF).copy(0.4f), RoundedCornerShape(18.dp))
+                .clickable(onClick = onSelectSolana).padding(20.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("🟣", fontSize = 36.sp)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Solana SPL", color = Color(0xFF9945FF), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("رسوم منخفضة جداً · سريع · ~0.000005 SOL", color = CryptoGray, fontSize = 13.sp)
+                    Spacer(Modifier.height(4.dp))
+                    Text("الرصيد: ${String.format("%.2f", 0.0)} USDT", color = CryptoGray, fontSize = 12.sp)
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFF9945FF))
             }
         }
     }
