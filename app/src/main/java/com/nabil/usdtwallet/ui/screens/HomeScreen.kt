@@ -33,46 +33,56 @@ fun HomeScreen(viewModel: WalletViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
-    var addressCopied by remember { mutableStateOf(false) }
+    var addressCopied by remember { mutableStateOf("") }
 
-    // الرصيد الإجمالي بالدولار (USDT TRC20 + USDT BEP20 + قيمة BNB + قيمة TRX)
-    val totalUsdt = uiState.usdtBalance + uiState.bscUsdtBalance +
+    // الرصيد الإجمالي
+    val totalUsdt = uiState.usdtBalance + uiState.bscUsdtBalance + uiState.solUsdtBalance +
         (uiState.bnbBalance * uiState.bnbUsdPrice) +
-        (uiState.trxBalance * uiState.trxUsdPrice)
+        (uiState.trxBalance * uiState.trxUsdPrice) +
+        (uiState.solBalance * uiState.solUsdPrice)
+
+    // اسم المحفظة النشطة
+    val activeWalletName = uiState.wallets.find { it.id == uiState.activeWalletId }?.name ?: "محفظتي"
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(CryptoDark)
-            .verticalScroll(rememberScrollState())
+        modifier = Modifier.fillMaxSize().background(CryptoDark).verticalScroll(rememberScrollState())
     ) {
-        // ─── Top Bar ──────────────────────────────────────────
+        // ─── Top Bar ─────────────────────────────────────────
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(if (uiState.isTestnet) CryptoYellow.copy(alpha = 0.12f) else CryptoDarkCard)
+            modifier = Modifier.fillMaxWidth()
+                .background(if (uiState.isTestnet) CryptoYellow.copy(0.12f) else CryptoDarkCard)
                 .padding(horizontal = 16.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(8.dp).clip(CircleShape)
-                        .background(if (uiState.isTestnet) CryptoYellow else CryptoGreen)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    if (uiState.isTestnet) "وضع التجربة" else "الشبكة الحقيقية",
-                    color = if (uiState.isTestnet) CryptoYellow else CryptoGreen,
-                    fontSize = 12.sp, fontWeight = FontWeight.SemiBold
-                )
+            // اسم المحفظة النشطة + تبديل
+            Row(
+                modifier = Modifier.clip(RoundedCornerShape(20.dp)).background(CryptoDarkCard)
+                    .clickable { viewModel.navigate(Screen.Wallets) }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text("💼", fontSize = 14.sp)
+                Text(activeWalletName, color = CryptoWhite, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                if (uiState.wallets.size > 1) {
+                    Icon(Icons.Default.UnfoldMore, contentDescription = null, tint = CryptoGray, modifier = Modifier.size(14.dp))
+                }
             }
-            IconButton(onClick = { viewModel.navigate(Screen.Settings) }) {
-                Icon(Icons.Default.Settings, contentDescription = null, tint = CryptoGray, modifier = Modifier.size(20.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (uiState.isTestnet) {
+                    Box(modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(CryptoYellow.copy(0.2f)).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                        Text("🧪 تجريبي", color = CryptoYellow, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                }
+                IconButton(onClick = { viewModel.navigate(Screen.Settings) }) {
+                    Icon(Icons.Default.Settings, contentDescription = null, tint = CryptoGray, modifier = Modifier.size(20.dp))
+                }
             }
         }
 
-        // ─── تحديث متاح ──────────────────────────────────────
+        // تحديث متاح
         if (uiState.updateAvailable) {
             Row(
                 modifier = Modifier.fillMaxWidth().background(CryptoGreen)
@@ -89,8 +99,8 @@ fun HomeScreen(viewModel: WalletViewModel) {
         // ─── Balance Card ─────────────────────────────────────
         Box(
             modifier = Modifier.fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(CryptoGreen.copy(alpha = 0.15f), CryptoDark)))
-                .padding(horizontal = 24.dp, vertical = 32.dp)
+                .background(Brush.verticalGradient(listOf(CryptoGreen.copy(0.15f), CryptoDark)))
+                .padding(horizontal = 20.dp, vertical = 28.dp)
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                 Text("إجمالي الرصيد", color = CryptoGray, fontSize = 13.sp)
@@ -100,89 +110,63 @@ fun HomeScreen(viewModel: WalletViewModel) {
                     CircularProgressIndicator(color = CryptoGreen, modifier = Modifier.size(32.dp))
                 } else {
                     Row(verticalAlignment = Alignment.Bottom) {
-                        Text(
-                            String.format("%.2f", totalUsdt),
-                            fontSize = 44.sp, fontWeight = FontWeight.Bold, color = CryptoWhite
-                        )
+                        Text(String.format("%.2f", totalUsdt), fontSize = 42.sp, fontWeight = FontWeight.Bold, color = CryptoWhite)
                         Spacer(Modifier.width(6.dp))
                         Text("USDT", fontSize = 18.sp, color = CryptoGreen, modifier = Modifier.padding(bottom = 6.dp))
                     }
                 }
 
+                uiState.errorMessage?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text("⚠️ $it", color = CryptoRed, fontSize = 11.sp, textAlign = TextAlign.Center)
+                }
+
                 Spacer(Modifier.height(16.dp))
 
-                // ─── بطاقتا الشبكتين ──────────────────────────
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // ─── بطاقات الشبكات الثلاث ───────────────────
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     // TRC-20
-                    Column(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
-                            .background(CryptoRed.copy(alpha = 0.12f))
-                            .padding(10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("🔴 TRC-20", color = CryptoRed, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(4.dp))
-                        Text("${String.format("%.2f", uiState.usdtBalance)} USDT", color = CryptoWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        Text("${String.format("%.2f", uiState.trxBalance)} TRX", color = CryptoGray, fontSize = 11.sp)
-                        Spacer(Modifier.height(4.dp))
-                        // عنوان مختصر قابل للنسخ
-                        Row(
-                            modifier = Modifier.clip(RoundedCornerShape(6.dp))
-                                .background(CryptoDarkCard)
-                                .clickable { clipboard.setText(AnnotatedString(uiState.address)); addressCopied = true }
-                                .padding(horizontal = 6.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                if (uiState.address.length > 10) "${uiState.address.take(5)}...${uiState.address.takeLast(4)}" else uiState.address,
-                                color = CryptoGray, fontSize = 10.sp
-                            )
-                            Spacer(Modifier.width(3.dp))
-                            Icon(Icons.Default.ContentCopy, contentDescription = null, tint = CryptoGray, modifier = Modifier.size(10.dp))
-                        }
-                    }
-
+                    NetworkBalanceCard(
+                        emoji   = "🔴",
+                        name    = "TRC-20",
+                        usdt    = uiState.usdtBalance,
+                        native  = uiState.trxBalance,
+                        nativeSym = "TRX",
+                        address = uiState.address,
+                        color   = CryptoRed,
+                        modifier = Modifier.weight(1f),
+                        onCopy  = { clipboard.setText(AnnotatedString(uiState.address)); addressCopied = "tron" }
+                    )
                     // BEP-20
-                    Column(
-                        modifier = Modifier.weight(1f).clip(RoundedCornerShape(12.dp))
-                            .background(CryptoYellow.copy(alpha = 0.12f))
-                            .padding(10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text("🟡 BEP-20", color = CryptoYellow, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(4.dp))
-                        Text("${String.format("%.2f", uiState.bscUsdtBalance)} USDT", color = CryptoWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-                        Text("${String.format("%.4f", uiState.bnbBalance)} BNB", color = CryptoGray, fontSize = 11.sp)
-                        Spacer(Modifier.height(4.dp))
-                        Row(
-                            modifier = Modifier.clip(RoundedCornerShape(6.dp))
-                                .background(CryptoDarkCard)
-                                .clickable { clipboard.setText(AnnotatedString(uiState.bscAddress)); addressCopied = true }
-                                .padding(horizontal = 6.dp, vertical = 3.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                if (uiState.bscAddress.length > 10) "${uiState.bscAddress.take(5)}...${uiState.bscAddress.takeLast(4)}" else uiState.bscAddress,
-                                color = CryptoGray, fontSize = 10.sp
-                            )
-                            Spacer(Modifier.width(3.dp))
-                            Icon(Icons.Default.ContentCopy, contentDescription = null, tint = CryptoGray, modifier = Modifier.size(10.dp))
-                        }
-                    }
+                    NetworkBalanceCard(
+                        emoji   = "🟡",
+                        name    = "BEP-20",
+                        usdt    = uiState.bscUsdtBalance,
+                        native  = uiState.bnbBalance,
+                        nativeSym = "BNB",
+                        address = uiState.bscAddress,
+                        color   = CryptoYellow,
+                        modifier = Modifier.weight(1f),
+                        onCopy  = { clipboard.setText(AnnotatedString(uiState.bscAddress)); addressCopied = "bsc" }
+                    )
+                    // Solana
+                    NetworkBalanceCard(
+                        emoji   = "🟣",
+                        name    = "SOL",
+                        usdt    = uiState.solUsdtBalance,
+                        native  = uiState.solBalance,
+                        nativeSym = "SOL",
+                        address = uiState.solanaAddress,
+                        color   = Color(0xFF9945FF),
+                        modifier = Modifier.weight(1f),
+                        onCopy  = { clipboard.setText(AnnotatedString(uiState.solanaAddress)); addressCopied = "sol" }
+                    )
                 }
 
-                LaunchedEffect(addressCopied) {
-                    if (addressCopied) { kotlinx.coroutines.delay(2000); addressCopied = false }
-                }
-
-                if (addressCopied) {
+                if (addressCopied.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp))
                     Text("✅ تم نسخ العنوان", color = CryptoGreen, fontSize = 11.sp)
-                }
-
-                uiState.errorMessage?.let {
-                    Spacer(Modifier.height(8.dp))
-                    Text("⚠️ $it", color = CryptoRed, fontSize = 12.sp, textAlign = TextAlign.Center)
+                    LaunchedEffect(addressCopied) { kotlinx.coroutines.delay(2000); addressCopied = "" }
                 }
             }
         }
@@ -190,36 +174,29 @@ fun HomeScreen(viewModel: WalletViewModel) {
         // ─── Action Buttons ───────────────────────────────────
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            ActionButton(Modifier.weight(1f), Icons.Default.ArrowUpward,    "إرسال",    CryptoGreen)  { viewModel.navigate(Screen.Send) }
-            ActionButton(Modifier.weight(1f), Icons.Default.ArrowDownward,  "استقبال",  CryptoBlue)   { viewModel.navigate(Screen.Receive) }
-            ActionButton(Modifier.weight(1f), Icons.Default.TrendingUp,     "السوق",    CryptoYellow) { viewModel.navigate(Screen.Market) }
-            ActionButton(Modifier.weight(1f), Icons.Default.Refresh,        "تحديث",    CryptoGray)   { viewModel.refreshBalance(); viewModel.fetchPrices() }
+            ActionButton(Modifier.weight(1f), Icons.Default.ArrowUpward,   "إرسال",   CryptoGreen)  { viewModel.navigate(Screen.Send) }
+            ActionButton(Modifier.weight(1f), Icons.Default.ArrowDownward, "استقبال", CryptoBlue)   { viewModel.navigate(Screen.Receive) }
+            ActionButton(Modifier.weight(1f), Icons.Default.TrendingUp,    "السوق",   CryptoYellow) { viewModel.navigate(Screen.Market) }
+            ActionButton(Modifier.weight(1f), Icons.Default.Refresh,       "تحديث",   CryptoGray)   { viewModel.refreshBalance(); viewModel.fetchPrices() }
         }
 
         Spacer(Modifier.height(20.dp))
 
         // ─── آخر المعاملات ────────────────────────────────────
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Text("آخر المعاملات", fontWeight = FontWeight.SemiBold, color = CryptoWhite, fontSize = 16.sp)
             TextButton(onClick = { viewModel.navigate(Screen.History) }) {
                 Text("عرض الكل", color = CryptoGreen, fontSize = 13.sp)
             }
         }
 
-        Spacer(Modifier.height(6.dp))
-
         if (uiState.transactions.isEmpty()) {
-            Box(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
-                    .clip(RoundedCornerShape(14.dp)).background(CryptoDarkCard).padding(28.dp),
-                contentAlignment = Alignment.Center
-            ) {
+            Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                .clip(RoundedCornerShape(14.dp)).background(CryptoDarkCard).padding(28.dp),
+                contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("📭", fontSize = 28.sp)
                     Spacer(Modifier.height(6.dp))
@@ -228,11 +205,49 @@ fun HomeScreen(viewModel: WalletViewModel) {
             }
         } else {
             uiState.transactions.take(3).forEach { tx ->
-                TransactionItem(tx = tx, myAddress = uiState.address, modifier = Modifier.padding(horizontal = 16.dp, vertical = 3.dp))
+                TransactionItem(tx = tx, myAddress = uiState.address,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 3.dp))
             }
         }
 
         Spacer(Modifier.height(80.dp))
+    }
+}
+
+// ─── بطاقة رصيد الشبكة ───────────────────────────────────
+
+@Composable
+private fun NetworkBalanceCard(
+    emoji: String, name: String,
+    usdt: Double, native: Double, nativeSym: String,
+    address: String, color: Color,
+    modifier: Modifier, onCopy: () -> Unit
+) {
+    Column(
+        modifier = modifier.clip(RoundedCornerShape(12.dp))
+            .background(color.copy(0.1f))
+            .padding(10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("$emoji $name", color = color, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(4.dp))
+        Text("${String.format("%.2f", usdt)}", color = CryptoWhite, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text("USDT", color = CryptoGray, fontSize = 9.sp)
+        Spacer(Modifier.height(2.dp))
+        Text("${String.format("%.4f", native)} $nativeSym", color = CryptoGray, fontSize = 9.sp)
+        Spacer(Modifier.height(6.dp))
+        if (address.isNotEmpty()) {
+            Row(
+                modifier = Modifier.clip(RoundedCornerShape(6.dp))
+                    .background(CryptoDarkCard).clickable(onClick = onCopy)
+                    .padding(horizontal = 5.dp, vertical = 3.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("${address.take(4)}..${address.takeLast(3)}", color = CryptoGray, fontSize = 8.sp)
+                Spacer(Modifier.width(2.dp))
+                Icon(Icons.Default.ContentCopy, contentDescription = null, tint = CryptoGray, modifier = Modifier.size(8.dp))
+            }
+        }
     }
 }
 
@@ -242,7 +257,7 @@ private fun ActionButton(modifier: Modifier, icon: androidx.compose.ui.graphics.
         modifier = modifier.clip(RoundedCornerShape(14.dp)).background(CryptoDarkCard).clickable(onClick = onClick).padding(vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Box(modifier = Modifier.size(38.dp).clip(CircleShape).background(color.copy(alpha = 0.15f)), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(38.dp).clip(CircleShape).background(color.copy(0.15f)), contentAlignment = Alignment.Center) {
             Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(20.dp))
         }
         Text(label, color = CryptoWhite, fontSize = 11.sp, fontWeight = FontWeight.Medium)
@@ -251,33 +266,21 @@ private fun ActionButton(modifier: Modifier, icon: androidx.compose.ui.graphics.
 
 @Composable
 fun TransactionItem(tx: com.nabil.usdtwallet.data.repository.Transaction, myAddress: String, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(CryptoDarkCard).padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Box(
-            modifier = Modifier.size(40.dp).clip(CircleShape)
-                .background(if (tx.isIncoming) CryptoGreen.copy(0.15f) else CryptoRed.copy(0.15f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                if (tx.isIncoming) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
+    Row(modifier = modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(CryptoDarkCard).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(modifier = Modifier.size(40.dp).clip(CircleShape)
+            .background(if (tx.isIncoming) CryptoGreen.copy(0.15f) else CryptoRed.copy(0.15f)),
+            contentAlignment = Alignment.Center) {
+            Icon(if (tx.isIncoming) Icons.Default.ArrowDownward else Icons.Default.ArrowUpward,
                 contentDescription = null,
-                tint = if (tx.isIncoming) CryptoGreen else CryptoRed,
-                modifier = Modifier.size(20.dp)
-            )
+                tint = if (tx.isIncoming) CryptoGreen else CryptoRed, modifier = Modifier.size(20.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
             Text(if (tx.isIncoming) "استقبال" else "إرسال", color = CryptoWhite, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Text(
-                if (tx.isIncoming) "من: ${tx.from.take(8)}..." else "إلى: ${tx.to.take(8)}...",
-                color = CryptoGray, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
+            Text(if (tx.isIncoming) "من: ${tx.from.take(8)}..." else "إلى: ${tx.to.take(8)}...",
+                color = CryptoGray, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(
-            "${if (tx.isIncoming) "+" else "-"}${String.format("%.2f", tx.amount)} USDT",
-            color = if (tx.isIncoming) CryptoGreen else CryptoRed,
-            fontSize = 14.sp, fontWeight = FontWeight.SemiBold
-        )
+        Text("${if (tx.isIncoming) "+" else "-"}${String.format("%.2f", tx.amount)} USDT",
+            color = if (tx.isIncoming) CryptoGreen else CryptoRed, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
