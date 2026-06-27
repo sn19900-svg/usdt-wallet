@@ -26,14 +26,18 @@ class SecureStorage(context: Context) {
         private const val KEY_MNEMONIC = "wallet_mnemonic"
         private const val KEY_ADDRESS = "wallet_address"
         private const val KEY_PRIVATE_KEY = "wallet_private_key"
-        private const val KEY_WALLET_CREATED = "wallet_created"
+        private const val KEY_WALLET_CREATED  = "wallet_created"
+        private const val KEY_BSC_PRIVATE_KEY = "bsc_private_key"
+        private const val KEY_BSC_ADDRESS     = "bsc_address"
     }
 
-    fun saveWallet(mnemonic: List<String>, privateKey: String, address: String) {
+    fun saveWallet(mnemonic: List<String>, privateKey: String, address: String, bscPrivateKey: String = "", bscAddress: String = "") {
         prefs.edit()
             .putString(KEY_MNEMONIC, mnemonic.joinToString(" "))
             .putString(KEY_PRIVATE_KEY, privateKey)
             .putString(KEY_ADDRESS, address)
+            .putString(KEY_BSC_PRIVATE_KEY, bscPrivateKey)
+            .putString(KEY_BSC_ADDRESS, bscAddress)
             .putBoolean(KEY_WALLET_CREATED, true)
             .apply()
     }
@@ -48,12 +52,16 @@ class SecureStorage(context: Context) {
     fun getPrivateKey(): String? = prefs.getString(KEY_PRIVATE_KEY, null)
 
     fun isWalletCreated(): Boolean = prefs.getBoolean(KEY_WALLET_CREATED, false)
+    fun getBscPrivateKey(): String? = prefs.getString(KEY_BSC_PRIVATE_KEY, null)?.ifEmpty { null }
+    fun getBscAddress(): String? = prefs.getString(KEY_BSC_ADDRESS, null)?.ifEmpty { null }
 
     fun deleteWallet() {
         prefs.edit()
             .remove(KEY_MNEMONIC)
             .remove(KEY_PRIVATE_KEY)
             .remove(KEY_ADDRESS)
+            .remove(KEY_BSC_PRIVATE_KEY)
+            .remove(KEY_BSC_ADDRESS)
             .putBoolean(KEY_WALLET_CREATED, false)
             .apply()
     }
