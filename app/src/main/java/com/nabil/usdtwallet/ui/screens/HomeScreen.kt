@@ -36,10 +36,11 @@ fun HomeScreen(viewModel: WalletViewModel) {
     var addressCopied by remember { mutableStateOf("") }
 
     // الرصيد الإجمالي
-    val totalUsdt = uiState.usdtBalance + uiState.bscUsdtBalance + uiState.solUsdtBalance +
+    val totalUsdt = uiState.usdtBalance + uiState.bscUsdtBalance + uiState.solUsdtBalance + uiState.ethUsdtBalance +
         (uiState.bnbBalance * uiState.bnbUsdPrice) +
         (uiState.trxBalance * uiState.trxUsdPrice) +
-        (uiState.solBalance * uiState.solUsdPrice)
+        (uiState.solBalance * uiState.solUsdPrice) +
+        (uiState.ethBalance * uiState.ethUsdPrice)
 
     // اسم المحفظة النشطة
     val activeWalletName = uiState.wallets.find { it.id == uiState.activeWalletId }?.name ?: "محفظتي"
@@ -161,6 +162,25 @@ fun HomeScreen(viewModel: WalletViewModel) {
                         modifier = Modifier.weight(1f),
                         onCopy  = { clipboard.setText(AnnotatedString(uiState.solanaAddress)); addressCopied = "sol" }
                     )
+                }
+
+                Spacer(Modifier.height(6.dp))
+
+                // الصف الثاني - ETH
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Ethereum
+                    NetworkBalanceCard(
+                        emoji   = "🔷",
+                        name    = "ETH",
+                        usdt    = uiState.ethUsdtBalance,
+                        native  = uiState.ethBalance,
+                        nativeSym = "ETH",
+                        address = uiState.ethAddress,
+                        color   = Color(0xFF627EEA),
+                        modifier = Modifier.weight(1f),
+                        onCopy  = { clipboard.setText(AnnotatedString(uiState.ethAddress)); addressCopied = "eth" }
+                    )
+                    Spacer(Modifier.weight(2f))  // placeholder
                 }
 
                 if (addressCopied.isNotEmpty()) {
