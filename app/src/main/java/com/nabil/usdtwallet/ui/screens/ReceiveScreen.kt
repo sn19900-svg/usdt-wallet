@@ -38,21 +38,34 @@ fun ReceiveScreen(viewModel: WalletViewModel) {
     if (selectedChain == null) {
         ChainSelectScreen(
             title = "استقبال — اختر الشبكة",
-            onSelectTron = { selectedChain = ActiveChain.TRON },
-            onSelectBsc  = { selectedChain = ActiveChain.BSC },
+            onSelectTron     = { selectedChain = ActiveChain.TRON },
+            onSelectBsc      = { selectedChain = ActiveChain.BSC },
+            onSelectSolana   = { selectedChain = ActiveChain.SOLANA },
+            onSelectEthereum = { selectedChain = ActiveChain.ETHEREUM },
             onBack = { viewModel.navigate(Screen.Home) }
         )
         return
     }
 
-    val isBsc = selectedChain == ActiveChain.BSC
-    val currentAddress = if (isBsc) uiState.bscAddress else uiState.address
-    val chainName  = if (isBsc) "BSC BEP-20" else "Tron TRC-20"
-    val chainColor = if (isBsc) CryptoYellow else CryptoRed
-    val warningText = if (isBsc)
-        "⚠️ أرسل BEP-20 فقط لهذا العنوان. إرسال شبكة أخرى يؤدي لفقدان الأموال."
-    else
-        "⚠️ أرسل TRC-20 فقط لهذا العنوان. إرسال شبكة أخرى يؤدي لفقدان الأموال."
+    val currentAddress = when (selectedChain) {
+        ActiveChain.BSC      -> uiState.bscAddress
+        ActiveChain.SOLANA   -> uiState.solanaAddress
+        ActiveChain.ETHEREUM -> uiState.ethAddress
+        else                 -> uiState.address
+    }
+    val chainName = when (selectedChain) {
+        ActiveChain.BSC      -> "BSC BEP-20"
+        ActiveChain.SOLANA   -> "Solana SPL"
+        ActiveChain.ETHEREUM -> "Ethereum ERC-20"
+        else                 -> "Tron TRC-20"
+    }
+    val chainColor = when (selectedChain) {
+        ActiveChain.BSC      -> CryptoYellow
+        ActiveChain.SOLANA   -> androidx.compose.ui.graphics.Color(0xFF9945FF)
+        ActiveChain.ETHEREUM -> androidx.compose.ui.graphics.Color(0xFF627EEA)
+        else                 -> CryptoRed
+    }
+    val warningText = "⚠️ أرسل $chainName فقط لهذا العنوان. إرسال شبكة أخرى يؤدي لفقدان الأموال."
 
     val qrBitmap = remember(currentAddress) { generateQrCode(currentAddress, 400) }
 
