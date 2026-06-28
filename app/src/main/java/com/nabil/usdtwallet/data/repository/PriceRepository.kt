@@ -29,11 +29,12 @@ object PriceRepository {
         var bnbUsd = cachedPrices.bnbUsd
         var trxUsd = cachedPrices.trxUsd
         var solUsd = cachedPrices.solUsd
+        var ethUsd = cachedPrices.ethUsd
         var usdSyp = cachedPrices.usdSyp
 
         // ─── 1. أسعار العملات من Binance ─────────────────────
         try {
-            val symbols = "%5B%22BNBUSDT%22,%22TRXUSDT%22,%22SOLUSDT%22%5D" // ["BNBUSDT","TRXUSDT"]
+            val symbols = "%5B%22BNBUSDT%22,%22TRXUSDT%22,%22SOLUSDT%22,%22ETHUSDT%22%5D" // ["BNBUSDT","TRXUSDT"]
             val json = JSONArray(
                 URL("https://api.binance.com/api/v3/ticker/price?symbols=$symbols").readText()
             )
