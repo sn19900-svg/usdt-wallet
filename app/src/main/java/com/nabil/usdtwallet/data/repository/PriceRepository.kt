@@ -12,7 +12,8 @@ data class CryptoPrices(
     val usdtUsd: Double = 1.0,
     val bnbUsd: Double = 0.0,
     val trxUsd: Double = 0.0,
-    val usdSyp: Double = 14000.0
+    val solUsd: Double = 0.0,
+    val ethUsd: Double = 0.0
 )
 
 object PriceRepository {
@@ -30,7 +31,6 @@ object PriceRepository {
         var trxUsd = cachedPrices.trxUsd
         var solUsd = cachedPrices.solUsd
         var ethUsd = cachedPrices.ethUsd
-        var usdSyp = cachedPrices.usdSyp
 
         // ─── 1. أسعار العملات من Binance ─────────────────────
         try {
