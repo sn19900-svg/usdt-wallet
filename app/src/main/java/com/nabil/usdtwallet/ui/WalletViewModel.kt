@@ -29,7 +29,7 @@ sealed class Screen {
     object Wallets     : Screen()   // إدارة المحافظ
 }
 
-enum class ActiveChain { TRON, BSC, SOLANA }
+enum class ActiveChain { TRON, BSC, SOLANA, ETHEREUM }
 
 // ─── UI State ─────────────────────────────────────────────
 data class WalletUiState(
@@ -59,6 +59,12 @@ data class WalletUiState(
     val bnbUsdPrice: Double = 0.0,
     val trxUsdPrice: Double = 0.0,
     val solUsdPrice: Double = 0.0,
+
+    // Ethereum
+    val ethAddress: String = "",
+    val ethUsdtBalance: Double = 0.0,
+    val ethBalance: Double = 0.0,
+    val ethUsdPrice: Double = 0.0,
 
     // مشتركة
     val transactions: List<Transaction> = emptyList(),
@@ -110,13 +116,36 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     private fun loadActiveWallet() {
         val wallet = MultiWalletStorage.getActive(app) ?: return
         val allWallets = MultiWalletStorage.getAll(app)
+
+        // إصلاح: إذا كان bscAddress فارغاً نشتقه من mnemonic
+        val bscAddr = wallet.bscAddress.ifEmpty {
+            val words = wallet.mnemonic.split(" ")
+            WalletManager.deriveBscAddress(words).also { derived ->
+                if (derived.isNotEmpty()) {
+                    val bscPriv = WalletManager.deriveBscPrivateKey(words)
+                    val solAddr = wallet.solanaAddress.ifEmpty { WalletManager.deriveSolanaAddress(words) }
+                    val solPriv = wallet.solanaPrivateKey.ifEmpty { WalletManager.deriveSolanaPrivateKeyBase58(words) }
+                    MultiWalletStorage.save(app, wallet.copy(
+                        bscAddress = derived,
+                        bscPrivateKey = bscPriv,
+                        solanaAddress = solAddr,
+                        solanaPrivateKey = solPriv,
+                        ethereumAddress = derived,
+                        ethereumPrivateKey = bscPriv
+                    ))
+                }
+            }
+        }
+        val ethAddr = wallet.ethereumAddress.ifEmpty { bscAddr }
+
         _uiState.update {
             it.copy(
-                wallets       = allWallets,
+                wallets        = allWallets,
                 activeWalletId = wallet.id,
                 address        = wallet.tronAddress,
-                bscAddress     = wallet.bscAddress,
-                solanaAddress  = wallet.solanaAddress
+                bscAddress     = bscAddr,
+                solanaAddress  = wallet.solanaAddress,
+                ethAddress     = ethAddr
             )
         }
     }
@@ -179,7 +208,9 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                     bscAddress       = bscAddr,
                     bscPrivateKey    = bscPriv,
                     solanaAddress    = solAddr,
-                    solanaPrivateKey = solPriv
+                    solanaPrivateKey = solPriv,
+                    ethereumAddress  = bscAddr,
+                    ethereumPrivateKey = bscPriv
                 )
                 MultiWalletStorage.save(app, wallet)
                 MultiWalletStorage.setActive(app, wallet.id)
@@ -270,7 +301,8 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         when (_uiState.value.activeChain) {
             ActiveChain.TRON   -> refreshTronBalance()
             ActiveChain.BSC    -> refreshBscBalance()
-            ActiveChain.SOLANA -> refreshSolanaBalance()
+            ActiveChain.SOLANA   -> refreshSolanaBalance()
+            ActiveChain.ETHEREUM -> refreshEthBalance()
         }
     }
 
@@ -302,6 +334,24 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    private fun refreshEthBalance() {
+        // ETH يستخدم نفس العنوان BSC لكن شبكة Ethereum
+        // حالياً نعرض رصيد BSC كمؤشر - سيُضاف ETH API لاحقاً
+        val ethAddr = _uiState.value.ethAddress; if (ethAddr.isEmpty()) return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val usdtResult = BscTransactionSigner.getUsdtBalance(ethAddr)
+            val ethResult  = BscTransactionSigner.getBnbBalance(ethAddr)
+            _uiState.update {
+                it.copy(
+                    ethUsdtBalance = (usdtResult as? Result.Success)?.data ?: it.ethUsdtBalance,
+                    ethBalance     = (ethResult  as? Result.Success)?.data ?: it.ethBalance,
+                    isLoading = false
+                )
+            }
+        }
+    }
+
     private fun refreshSolanaBalance() {
         val solAddr = _uiState.value.solanaAddress; if (solAddr.isEmpty()) return
         viewModelScope.launch {
@@ -317,7 +367,7 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             try {
                 val prices = PriceRepository.getPrices()
-                _uiState.update { it.copy(bnbUsdPrice = prices.bnbUsd, trxUsdPrice = prices.trxUsd, solUsdPrice = prices.solUsd) }
+                _uiState.update { it.copy(bnbUsdPrice = prices.bnbUsd, trxUsdPrice = prices.trxUsd, solUsdPrice = prices.solUsd, ethUsdPrice = prices.ethUsd) }
             } catch (_: Exception) {}
         }
     }
