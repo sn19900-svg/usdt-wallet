@@ -340,7 +340,7 @@ fun SendScreen(viewModel: WalletViewModel) {
 // ─── شاشة اختيار الشبكة ──────────────────────────────────
 
 @Composable
-fun ChainSelectScreen(title: String, onSelectTron: () -> Unit, onSelectBsc: () -> Unit, onSelectSolana: () -> Unit = {}, onBack: () -> Unit) {
+fun ChainSelectScreen(title: String, onSelectTron: () -> Unit, onSelectBsc: () -> Unit, onSelectSolana: () -> Unit = {}, onSelectEthereum: () -> Unit = {}, onBack: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().background(CryptoDark).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -410,10 +410,26 @@ fun ChainSelectScreen(title: String, onSelectTron: () -> Unit, onSelectBsc: () -
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Solana SPL", color = Color(0xFF9945FF), fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Text("رسوم منخفضة جداً · سريع · ~0.000005 SOL", color = CryptoGray, fontSize = 13.sp)
-                    Spacer(Modifier.height(4.dp))
-                    Text("الرصيد: ${String.format("%.2f", 0.0)} USDT", color = CryptoGray, fontSize = 12.sp)
                 }
                 Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFF9945FF))
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Ethereum
+        Box(
+            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
+                .background(Color(0xFF627EEA).copy(0.12f)).border(1.5.dp, Color(0xFF627EEA).copy(0.4f), RoundedCornerShape(18.dp))
+                .clickable(onClick = onSelectEthereum).padding(20.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text("🔷", fontSize = 36.sp)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Ethereum ERC-20", color = Color(0xFF627EEA), fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("أوسع انتشاراً · رسوم ETH (Gas)", color = CryptoGray, fontSize = 13.sp)
+                }
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Color(0xFF627EEA))
             }
         }
     }
