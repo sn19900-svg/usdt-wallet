@@ -338,6 +338,20 @@ object WalletManager {
         return encodeBase58(privBytes + pubBytes)
     }
 
+
+    // ─── Ethereum: m/44'/60'/0'/0/0 (نفس BSC) ─────────────
+    // ETH و BSC يستخدمان نفس private key و address
+    // لكن نحتفظ بهما منفصلين للتوضيح
+
+    fun deriveEthereumAddress(mnemonicWords: List<String>): String {
+        // ETH يستخدم نفس مسار BSC: m/44'/60'/0'/0/0
+        return deriveBscAddress(mnemonicWords)
+    }
+
+    fun deriveEthereumPrivateKey(mnemonicWords: List<String>): String {
+        return deriveBscPrivateKey(mnemonicWords)
+    }
+
     fun isValidTronAddress(address: String) = address.startsWith("T") && address.length == 34
 
     // ─── Helpers ──────────────────────────────────────────
