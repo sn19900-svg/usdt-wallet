@@ -18,6 +18,8 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 import java.security.KeyPairGenerator
 import java.security.spec.NamedParameterSpec
+import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
+import org.bouncycastle.crypto.params.Ed25519PublicKeyParameters
 
 /**
  * WalletManager - BIP39 + BIP44 صحيح متوافق مع Trust Wallet
