@@ -16,6 +16,8 @@ data class WalletAccount(
     val bscPrivateKey: String,
     val solanaAddress: String,
     val solanaPrivateKey: String,        // base58
+    val ethereumAddress: String = "",    // نفس BSC
+    val ethereumPrivateKey: String = ""  // نفس BSC
     val createdAt: Long = System.currentTimeMillis(),
     val isActive: Boolean = false
 )
