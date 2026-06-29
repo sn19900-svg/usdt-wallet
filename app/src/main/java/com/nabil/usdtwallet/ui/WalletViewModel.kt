@@ -442,6 +442,16 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             ActiveChain.SOLANA -> {
                 _uiState.update { it.copy(errorMessage = "إرسال USDT على Solana قيد التطوير") }
             }
+            ActiveChain.ETHEREUM -> {
+                val pk = activeWallet()?.ethereumPrivateKey ?: return
+                viewModelScope.launch {
+                    _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+                    when (val r = BscTransactionSigner.sendUsdt(_uiState.value.ethAddress, toAddress, amount, pk)) {
+                        is Result.Success -> { _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = r.data) }; refreshBalance() }
+                        is Result.Error   -> _uiState.update { it.copy(isLoading = false, errorMessage = r.message) }
+                    }
+                }
+            }
         }
     }
 
