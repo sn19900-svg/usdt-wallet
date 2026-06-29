@@ -5,7 +5,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.nabil.usdtwallet.BuildConfig
 import com.nabil.usdtwallet.data.repository.*
+import com.nabil.usdtwallet.data.repository.EthApiService
 import com.nabil.usdtwallet.domain.usecase.BscTransactionSigner
+import com.nabil.usdtwallet.domain.usecase.SolanaTransactionSigner
 import com.nabil.usdtwallet.domain.usecase.TronTransactionSigner
 import com.nabil.usdtwallet.domain.usecase.WalletNotificationWorker
 import com.nabil.usdtwallet.domain.wallet.WalletManager
