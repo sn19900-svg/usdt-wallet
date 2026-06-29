@@ -4,7 +4,9 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import com.nabil.usdtwallet.data.repository.Result
+import android.util.Base64
 import org.bouncycastle.crypto.params.Ed25519PrivateKeyParameters
+import org.bouncycastle.crypto.signers.Ed25519Signer
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -233,5 +235,5 @@ object SolanaTransactionSigner {
     }
 
     private fun encodeBase64(bytes: ByteArray): String =
-        android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        Base64.encodeToString(bytes, Base64.NO_WRAP)
 }
