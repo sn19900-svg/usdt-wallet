@@ -298,12 +298,12 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
 
     // ─── تحديث الأرصدة ───────────────────────────────────
     fun refreshBalance() {
-        when (_uiState.value.activeChain) {
-            ActiveChain.TRON   -> refreshTronBalance()
-            ActiveChain.BSC    -> refreshBscBalance()
-            ActiveChain.SOLANA   -> refreshSolanaBalance()
-            ActiveChain.ETHEREUM -> refreshEthBalance()
-        }
+        // جلب جميع الشبكات دائماً
+        refreshTronBalance()
+        refreshBscBalance()
+        refreshSolanaBalance()
+        refreshEthBalance()
+    }
     }
 
     private fun refreshTronBalance() {
@@ -335,30 +335,20 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun refreshEthBalance() {
-        // ETH يستخدم نفس العنوان BSC لكن شبكة Ethereum
-        // حالياً نعرض رصيد BSC كمؤشر - سيُضاف ETH API لاحقاً
         val ethAddr = _uiState.value.ethAddress; if (ethAddr.isEmpty()) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            val usdtResult = BscTransactionSigner.getUsdtBalance(ethAddr)
-            val ethResult  = BscTransactionSigner.getBnbBalance(ethAddr)
-            _uiState.update {
-                it.copy(
-                    ethUsdtBalance = (usdtResult as? Result.Success)?.data ?: it.ethUsdtBalance,
-                    ethBalance     = (ethResult  as? Result.Success)?.data ?: it.ethBalance,
-                    isLoading = false
-                )
-            }
+            val ethBal  = EthApiService.getEthBalance(ethAddr)
+            val usdtBal = EthApiService.getUsdtBalance(ethAddr)
+            _uiState.update { it.copy(ethBalance = ethBal, ethUsdtBalance = usdtBal) }
         }
     }
 
     private fun refreshSolanaBalance() {
         val solAddr = _uiState.value.solanaAddress; if (solAddr.isEmpty()) return
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            val sol  = SolanaApiService.getSolBalance(solAddr)
-            val usdt = SolanaApiService.getUsdtBalance(solAddr)
-            _uiState.update { it.copy(solBalance = sol, solUsdtBalance = usdt, isLoading = false) }
+            val sol  = SolanaTransactionSigner.getSolBalance(solAddr)
+            val usdt = SolanaTransactionSigner.getUsdtBalance(solAddr)
+            _uiState.update { it.copy(solBalance = sol, solUsdtBalance = usdt) }
         }
     }
 
@@ -473,6 +463,23 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
             when (val r = BscTransactionSigner.sendBnb(_uiState.value.bscAddress, toAddress, amount, pk)) {
                 is Result.Success -> { _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = r.data) }; refreshBalance() }
                 is Result.Error   -> _uiState.update { it.copy(isLoading = false, errorMessage = r.message) }
+            }
+        }
+    }
+
+    fun sendSol(toAddress: String, amount: Double) {
+        val pk = activeWallet()?.solanaPrivateKey ?: run {
+            _uiState.update { it.copy(errorMessage = "لم يتم العثور على مفتاح Solana") }
+            return
+        }
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            when (val r = SolanaTransactionSigner.sendSol(_uiState.value.solanaAddress, toAddress, amount, pk)) {
+                is Result.Success -> {
+                    _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = r.data) }
+                    refreshSolanaBalance()
+                }
+                is Result.Error -> _uiState.update { it.copy(isLoading = false, errorMessage = r.message) }
             }
         }
     }
