@@ -34,6 +34,7 @@ fun HomeScreen(viewModel: WalletViewModel) {
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     var addressCopied by remember { mutableStateOf("") }
+    var showBreakdown by remember { mutableStateOf(false) }
 
     // الرصيد الإجمالي
     val totalUsdt = uiState.usdtBalance + uiState.bscUsdtBalance + uiState.solUsdtBalance + uiState.ethUsdtBalance +
@@ -122,71 +123,41 @@ fun HomeScreen(viewModel: WalletViewModel) {
                     Text("⚠️ $it", color = CryptoRed, fontSize = 11.sp, textAlign = TextAlign.Center)
                 }
 
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(8.dp))
 
-                // ─── بطاقات الشبكات الثلاث ───────────────────
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // TRC-20
-                    NetworkBalanceCard(
-                        emoji   = "🔴",
-                        name    = "TRC-20",
-                        usdt    = uiState.usdtBalance,
-                        native  = uiState.trxBalance,
-                        nativeSym = "TRX",
-                        address = uiState.address,
-                        color   = CryptoRed,
-                        modifier = Modifier.weight(1f),
-                        onCopy  = { clipboard.setText(AnnotatedString(uiState.address)); addressCopied = "tron" }
-                    )
-                    // BEP-20
-                    NetworkBalanceCard(
-                        emoji   = "🟡",
-                        name    = "BEP-20",
-                        usdt    = uiState.bscUsdtBalance,
-                        native  = uiState.bnbBalance,
-                        nativeSym = "BNB",
-                        address = uiState.bscAddress,
-                        color   = CryptoYellow,
-                        modifier = Modifier.weight(1f),
-                        onCopy  = { clipboard.setText(AnnotatedString(uiState.bscAddress)); addressCopied = "bsc" }
-                    )
-                    // Solana
-                    NetworkBalanceCard(
-                        emoji   = "🟣",
-                        name    = "SOL",
-                        usdt    = uiState.solUsdtBalance,
-                        native  = uiState.solBalance,
-                        nativeSym = "SOL",
-                        address = uiState.solanaAddress,
-                        color   = Color(0xFF9945FF),
-                        modifier = Modifier.weight(1f),
-                        onCopy  = { clipboard.setText(AnnotatedString(uiState.solanaAddress)); addressCopied = "sol" }
+                // عرض/إخفاء التفاصيل
+                TextButton(onClick = { showBreakdown = !showBreakdown }) {
+                    Text(
+                        if (showBreakdown) "إخفاء التفاصيل ▲" else "عرض تفاصيل المحفظة ▼",
+                        color = CryptoGray, fontSize = 12.sp
                     )
                 }
 
-                Spacer(Modifier.height(6.dp))
-
-                // الصف الثاني - ETH
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Ethereum
-                    NetworkBalanceCard(
-                        emoji   = "🔷",
-                        name    = "ETH",
-                        usdt    = uiState.ethUsdtBalance,
-                        native  = uiState.ethBalance,
-                        nativeSym = "ETH",
-                        address = uiState.ethAddress,
-                        color   = Color(0xFF627EEA),
-                        modifier = Modifier.weight(1f),
-                        onCopy  = { clipboard.setText(AnnotatedString(uiState.ethAddress)); addressCopied = "eth" }
-                    )
-                    Spacer(Modifier.weight(2f))  // placeholder
-                }
-
-                if (addressCopied.isNotEmpty()) {
+                if (showBreakdown) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        NetworkBalanceCard("🔴", "TRC-20", uiState.usdtBalance, uiState.trxBalance, "TRX", uiState.address, CryptoRed, Modifier.weight(1f)) {
+                            clipboard.setText(AnnotatedString(uiState.address)); addressCopied = "tron"
+                        }
+                        NetworkBalanceCard("🟡", "BEP-20", uiState.bscUsdtBalance, uiState.bnbBalance, "BNB", uiState.bscAddress, CryptoYellow, Modifier.weight(1f)) {
+                            clipboard.setText(AnnotatedString(uiState.bscAddress)); addressCopied = "bsc"
+                        }
+                        NetworkBalanceCard("🟣", "SOL", uiState.solUsdtBalance, uiState.solBalance, "SOL", uiState.solanaAddress, Color(0xFF9945FF), Modifier.weight(1f)) {
+                            clipboard.setText(AnnotatedString(uiState.solanaAddress)); addressCopied = "sol"
+                        }
+                    }
                     Spacer(Modifier.height(6.dp))
-                    Text("✅ تم نسخ العنوان", color = CryptoGreen, fontSize = 11.sp)
-                    LaunchedEffect(addressCopied) { kotlinx.coroutines.delay(2000); addressCopied = "" }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        NetworkBalanceCard("🔷", "ETH", uiState.ethUsdtBalance, uiState.ethBalance, "ETH", uiState.ethAddress, Color(0xFF627EEA), Modifier.weight(1f)) {
+                            clipboard.setText(AnnotatedString(uiState.ethAddress)); addressCopied = "eth"
+                        }
+                        Spacer(Modifier.weight(2f))
+                    }
+                    if (addressCopied.isNotEmpty()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text("✅ تم نسخ العنوان", color = CryptoGreen, fontSize = 11.sp)
+                        LaunchedEffect(addressCopied) { kotlinx.coroutines.delay(2000); addressCopied = "" }
+                    }
                 }
             }
         }
