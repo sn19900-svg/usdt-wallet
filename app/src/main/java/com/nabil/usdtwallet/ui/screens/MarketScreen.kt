@@ -2,6 +2,7 @@ package com.nabil.usdtwallet.ui.screens
 
 import android.annotation.SuppressLint
 import android.webkit.*
+import android.webkit.CookieManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -357,18 +358,23 @@ private fun TradingViewFullScreen(coin: CoinPrice, onBack: () -> Unit) {
                         mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                         cacheMode = WebSettings.LOAD_NO_CACHE
                         userAgentString = "Mozilla/5.0 (Linux; Android 13; Mobile) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36"
+                        allowContentAccess = true
+                        allowFileAccess = true
+                        databaseEnabled = true
                     }
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?) = false
                     }
                     webChromeClient = WebChromeClient()
+                    CookieManager.getInstance().setAcceptCookie(true)
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     setBackgroundColor(android.graphics.Color.parseColor("#131722"))
                     loadDataWithBaseURL(
-                        "https://s3.tradingview.com",
+                        "https://www.tradingview.com",
                         buildTvHtml(coin.symbol),
                         "text/html",
                         "UTF-8",
-                        null
+                        "https://www.tradingview.com"
                     )
                 }
             },
