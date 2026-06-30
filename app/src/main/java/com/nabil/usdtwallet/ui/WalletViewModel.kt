@@ -102,7 +102,11 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
 
     // ─── ترحيل من النظام القديم ───────────────────────────
     private fun migrateAndInit() {
-        MultiWalletStorage.migrateFromLegacy(app, secureStorage)
+        try {
+            MultiWalletStorage.migrateFromLegacy(app, secureStorage)
+        } catch (e: Exception) {
+            android.util.Log.e("WalletViewModel", "فشل الترحيل: ${e.message}")
+        }
         checkWalletExists()
     }
 
@@ -117,39 +121,55 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     private fun loadActiveWallet() {
-        val wallet = MultiWalletStorage.getActive(app) ?: return
-        val allWallets = MultiWalletStorage.getAll(app)
+        try {
+            val wallet = MultiWalletStorage.getActive(app) ?: return
+            val allWallets = MultiWalletStorage.getAll(app)
 
-        // إصلاح: إذا كان bscAddress فارغاً نشتقه من mnemonic
-        val bscAddr = wallet.bscAddress.ifEmpty {
-            val words = wallet.mnemonic.split(" ")
-            WalletManager.deriveBscAddress(words).also { derived ->
-                if (derived.isNotEmpty()) {
-                    val bscPriv = WalletManager.deriveBscPrivateKey(words)
-                    val solAddr = wallet.solanaAddress.ifEmpty { WalletManager.deriveSolanaAddress(words) }
-                    val solPriv = wallet.solanaPrivateKey.ifEmpty { WalletManager.deriveSolanaPrivateKeyBase58(words) }
-                    MultiWalletStorage.save(app, wallet.copy(
-                        bscAddress = derived,
-                        bscPrivateKey = bscPriv,
-                        solanaAddress = solAddr,
-                        solanaPrivateKey = solPriv,
-                        ethereumAddress = derived,
-                        ethereumPrivateKey = bscPriv
-                    ))
+            // عرض فوري بالبيانات المخزّنة - بدون أي اشتقاق على المسار الحرج
+            _uiState.update {
+                it.copy(
+                    wallets        = allWallets,
+                    activeWalletId = wallet.id,
+                    address        = wallet.tronAddress,
+                    bscAddress     = wallet.bscAddress,
+                    solanaAddress  = wallet.solanaAddress,
+                    ethAddress     = wallet.ethereumAddress.ifEmpty { wallet.bscAddress }
+                )
+            }
+
+            // إصلاح العناوين الناقصة لاحقاً في الخلفية (لا يحجب فتح القفل أبداً)
+            if (wallet.bscAddress.isEmpty() && wallet.mnemonic.trim().split(" ").size == 12) {
+                viewModelScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+                    try {
+                        val words = wallet.mnemonic.trim().split(" ")
+                        val bscAddr = WalletManager.deriveBscAddress(words)
+                        if (bscAddr.isNotEmpty()) {
+                            val bscPriv = WalletManager.deriveBscPrivateKey(words)
+                            val solAddr = WalletManager.deriveSolanaAddress(words)
+                            val solPriv = WalletManager.deriveSolanaPrivateKeyBase58(words)
+                            val updated = wallet.copy(
+                                bscAddress = bscAddr, bscPrivateKey = bscPriv,
+                                solanaAddress = solAddr, solanaPrivateKey = solPriv,
+                                ethereumAddress = bscAddr, ethereumPrivateKey = bscPriv
+                            )
+                            MultiWalletStorage.save(app, updated)
+                            _uiState.update {
+                                it.copy(
+                                    bscAddress = bscAddr,
+                                    solanaAddress = solAddr,
+                                    ethAddress = bscAddr,
+                                    wallets = MultiWalletStorage.getAll(app)
+                                )
+                            }
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("WalletViewModel", "فشل اشتقاق العناوين الناقصة: ${e.message}")
+                    }
                 }
             }
-        }
-        val ethAddr = wallet.ethereumAddress.ifEmpty { bscAddr }
-
-        _uiState.update {
-            it.copy(
-                wallets        = allWallets,
-                activeWalletId = wallet.id,
-                address        = wallet.tronAddress,
-                bscAddress     = bscAddr,
-                solanaAddress  = wallet.solanaAddress,
-                ethAddress     = ethAddr
-            )
+        } catch (e: Exception) {
+            android.util.Log.e("WalletViewModel", "فشل تحميل المحفظة النشطة: ${e.message}")
+            _uiState.update { it.copy(errorMessage = "خطأ في تحميل المحفظة") }
         }
     }
 
