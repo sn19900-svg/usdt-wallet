@@ -306,7 +306,6 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
         refreshSolanaBalance()
         refreshEthBalance()
     }
-    }
 
     private fun refreshTronBalance() {
         val address = _uiState.value.address; if (address.isEmpty()) return
@@ -432,7 +431,14 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                 }
             }
             ActiveChain.SOLANA -> {
-                _uiState.update { it.copy(errorMessage = "إرسال USDT على Solana قيد التطوير") }
+                val pk = activeWallet()?.solanaPrivateKey ?: return
+                viewModelScope.launch {
+                    _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+                    when (val r = SolanaTransactionSigner.sendUsdtSpl(_uiState.value.solanaAddress, toAddress, amount, pk)) {
+                        is Result.Success -> { _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = r.data) }; refreshSolanaBalance() }
+                        is Result.Error   -> _uiState.update { it.copy(isLoading = false, errorMessage = r.message) }
+                    }
+                }
             }
             ActiveChain.ETHEREUM -> {
                 val pk = activeWallet()?.ethereumPrivateKey ?: return
