@@ -174,12 +174,16 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun onUnlocked() {
-        loadActiveWallet()
+        try {
+            loadActiveWallet()
+        } catch (e: Exception) {
+            android.util.Log.e("WalletViewModel", "loadActiveWallet crashed: ${e.message}", e)
+        }
         _uiState.update { it.copy(isUnlocked = true, currentScreen = Screen.Home) }
-        refreshBalance()
-        fetchPrices()
-        loadAddressBook()
-        loadTransactions()
+        try { refreshBalance() } catch (e: Exception) { android.util.Log.e("WalletViewModel", "refreshBalance crashed: ${e.message}") }
+        try { fetchPrices() } catch (e: Exception) { android.util.Log.e("WalletViewModel", "fetchPrices crashed: ${e.message}") }
+        try { loadAddressBook() } catch (e: Exception) { android.util.Log.e("WalletViewModel", "loadAddressBook crashed: ${e.message}") }
+        try { loadTransactions() } catch (e: Exception) { android.util.Log.e("WalletViewModel", "loadTransactions crashed: ${e.message}") }
     }
 
     // ─── تبديل المحفظة النشطة ────────────────────────────
