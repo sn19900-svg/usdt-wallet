@@ -39,8 +39,27 @@ object MultiWalletStorage {
         val json = prefs(context).getString(KEY_WALLETS, null) ?: return emptyList()
         return try {
             val type = object : TypeToken<List<WalletAccount>>() {}.type
-            gson.fromJson(json, type) ?: emptyList()
-        } catch (e: Exception) { emptyList() }
+            val list: List<WalletAccount>? = gson.fromJson(json, type)
+            // حماية: Gson قد يضع null للحقول المضافة حديثاً في بيانات قديمة
+            // رغم أن Kotlin يعرّفها كـ non-null - نُصلحها يدوياً هنا
+            (list ?: emptyList()).map { w ->
+                w.copy(
+                    name                = w.name ?: "محفظة",
+                    mnemonic            = w.mnemonic ?: "",
+                    tronAddress         = w.tronAddress ?: "",
+                    tronPrivateKey      = w.tronPrivateKey ?: "",
+                    bscAddress          = w.bscAddress ?: "",
+                    bscPrivateKey       = w.bscPrivateKey ?: "",
+                    solanaAddress       = w.solanaAddress ?: "",
+                    solanaPrivateKey    = w.solanaPrivateKey ?: "",
+                    ethereumAddress     = w.ethereumAddress ?: "",
+                    ethereumPrivateKey  = w.ethereumPrivateKey ?: ""
+                )
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("MultiWalletStorage", "فشل قراءة المحافظ: ${e.message}")
+            emptyList()
+        }
     }
 
     // ─── جلب المحفظة النشطة ──────────────────────────────
