@@ -7,6 +7,7 @@ import com.nabil.usdtwallet.BuildConfig
 import com.nabil.usdtwallet.data.repository.*
 import com.nabil.usdtwallet.data.repository.EthApiService
 import com.nabil.usdtwallet.domain.usecase.BscTransactionSigner
+import com.nabil.usdtwallet.domain.usecase.EthTransactionSigner
 import com.nabil.usdtwallet.domain.usecase.SolanaTransactionSigner
 import com.nabil.usdtwallet.domain.usecase.TronTransactionSigner
 import com.nabil.usdtwallet.domain.usecase.WalletNotificationWorker
@@ -444,8 +445,8 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                 val pk = activeWallet()?.ethereumPrivateKey ?: return
                 viewModelScope.launch {
                     _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-                    when (val r = BscTransactionSigner.sendUsdt(_uiState.value.ethAddress, toAddress, amount, pk)) {
-                        is Result.Success -> { _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = r.data) }; refreshBalance() }
+                    when (val r = EthTransactionSigner.sendUsdt(_uiState.value.ethAddress, toAddress, amount, pk)) {
+                        is Result.Success -> { _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = r.data) }; refreshEthBalance() }
                         is Result.Error   -> _uiState.update { it.copy(isLoading = false, errorMessage = r.message) }
                     }
                 }
@@ -488,6 +489,17 @@ class WalletViewModel(application: Application) : AndroidViewModel(application) 
                     refreshSolanaBalance()
                 }
                 is Result.Error -> _uiState.update { it.copy(isLoading = false, errorMessage = r.message) }
+            }
+        }
+    }
+
+    fun sendEth(toAddress: String, amount: Double) {
+        val pk = activeWallet()?.ethereumPrivateKey ?: return
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+            when (val r = EthTransactionSigner.sendEth(_uiState.value.ethAddress, toAddress, amount, pk)) {
+                is Result.Success -> { _uiState.update { it.copy(isLoading = false, sendSuccess = true, sendTxId = r.data) }; refreshEthBalance() }
+                is Result.Error   -> _uiState.update { it.copy(isLoading = false, errorMessage = r.message) }
             }
         }
     }
