@@ -159,8 +159,8 @@ object SolanaTransactionSigner {
 
     // ─── SPL Token Program: بناء معاملة تحويل ─────────────
 
-    private val SPL_TOKEN_PROGRAM = decodeBase58("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toByteArray()
-    private val ASSOCIATED_TOKEN_PROGRAM = decodeBase58("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL").toByteArray()
+    private val SPL_TOKEN_PROGRAM by lazy { decodeBase58("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA").toByteArray() }
+    private val ASSOCIATED_TOKEN_PROGRAM by lazy { decodeBase58("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL").toByteArray() }
     private val SYSTEM_PROGRAM_ID = ByteArray(32)
 
     private fun findAssociatedTokenAddress(owner: ByteArray, mint: ByteArray): ByteArray {
